@@ -7,6 +7,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import javax.tools.Diagnostic;
+import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
@@ -19,9 +21,6 @@ class SqlTemplateProcessorTest {
 
     @Test
     void generatesTemplateClassForAnnotatedMethods() throws IOException {
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        assertTrue(compiler != null, "JavaCompiler must be available");
-        Path outputDir = Files.createTempDirectory("lumen-apt");
         String source = """
             package example;
 
@@ -32,8 +31,57 @@ class SqlTemplateProcessorTest {
                 void ping();
             }
             """;
-        JavaFileObject fileObject = new StringJavaFileObject("example.OrderRepo", source);
-        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(result.success());
+
+        Path generated = result.outputDir().resolve("example").resolve("OrderRepo_SqlTemplates.java");
+        assertTrue(Files.exists(generated));
+        String content = Files.readString(generated);
+        assertTrue(content.contains("SELECT 1"));
+        assertTrue(content.contains("PING_TEMPLATE"));
+    }
+
+    @Test
+    void validatesSqlConstFields() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.annotations.SqlConst;
+
+            public final class Consts {
+                @SqlConst
+                public static final String Q = "SELECT 1";
+            }
+            """;
+        CompilationResult result = compile("example.Consts", source);
+        assertTrue(result.success());
+    }
+
+    @Test
+    void rejectsNonConstantSqlConstFields() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.annotations.SqlConst;
+
+            public final class Consts {
+                @SqlConst
+                public final String Q = "SELECT 1";
+            }
+            """;
+        CompilationResult result = compile("example.Consts", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("static final field")));
+    }
+
+    private CompilationResult compile(String name, String source) throws IOException {
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        assertTrue(compiler != null, "JavaCompiler must be available");
+        Path outputDir = Files.createTempDirectory("lumen-apt");
+        JavaFileObject fileObject = new StringJavaFileObject(name, source);
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null)) {
             fileManager.setLocation(StandardLocation.SOURCE_OUTPUT, List.of(outputDir.toFile()));
             fileManager.setLocation(StandardLocation.CLASS_OUTPUT, List.of(outputDir.toFile()));
             List<String> options = List.of(
@@ -46,21 +94,18 @@ class SqlTemplateProcessorTest {
             JavaCompiler.CompilationTask task = compiler.getTask(
                 null,
                 fileManager,
-                null,
+                diagnostics,
                 options,
                 null,
                 List.of(fileObject)
             );
             task.setProcessors(List.of(new SqlTemplateProcessor()));
-            Boolean result = task.call();
-            assertTrue(result);
+            Boolean success = task.call();
+            return new CompilationResult(outputDir, success, diagnostics.getDiagnostics());
         }
+    }
 
-        Path generated = outputDir.resolve("example").resolve("OrderRepo_SqlTemplates.java");
-        assertTrue(Files.exists(generated));
-        String content = Files.readString(generated);
-        assertTrue(content.contains("SELECT 1"));
-        assertTrue(content.contains("PING_TEMPLATE"));
+    private record CompilationResult(Path outputDir, boolean success, List<Diagnostic<? extends JavaFileObject>> diagnostics) {
     }
 
     private static final class StringJavaFileObject extends SimpleJavaFileObject {

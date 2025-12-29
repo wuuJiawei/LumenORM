@@ -1,5 +1,6 @@
 package io.lighting.lumen.apt;
 
+import io.lighting.lumen.annotations.SqlConst;
 import io.lighting.lumen.annotations.SqlTemplate;
 import java.io.IOException;
 import java.io.Writer;
@@ -18,11 +19,16 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
-@SupportedAnnotationTypes("io.lighting.lumen.annotations.SqlTemplate")
+@SupportedAnnotationTypes({
+    "io.lighting.lumen.annotations.SqlTemplate",
+    "io.lighting.lumen.annotations.SqlConst"
+})
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class SqlTemplateProcessor extends AbstractProcessor {
 
@@ -33,6 +39,22 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         }
         Map<TypeElement, List<ExecutableElement>> methodsByType = new LinkedHashMap<>();
         boolean hasErrors = false;
+        hasErrors |= processSqlTemplates(roundEnv, methodsByType);
+        hasErrors |= processSqlConst(roundEnv);
+        if (hasErrors) {
+            return true;
+        }
+        for (Map.Entry<TypeElement, List<ExecutableElement>> entry : methodsByType.entrySet()) {
+            generateTemplateClass(entry.getKey(), entry.getValue());
+        }
+        return true;
+    }
+
+    private boolean processSqlTemplates(
+        RoundEnvironment roundEnv,
+        Map<TypeElement, List<ExecutableElement>> methodsByType
+    ) {
+        boolean hasErrors = false;
         for (Element element : roundEnv.getElementsAnnotatedWith(SqlTemplate.class)) {
             if (element.getKind() != ElementKind.METHOD) {
                 error(element, "@SqlTemplate can only be applied to methods");
@@ -42,23 +64,54 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
             ExecutableElement method = (ExecutableElement) element;
             SqlTemplate annotation = method.getAnnotation(SqlTemplate.class);
             String template = annotation.value();
-            try {
-                io.lighting.lumen.template.SqlTemplate.parse(template);
-            } catch (RuntimeException ex) {
-                error(method, "Invalid SQL template: " + ex.getMessage());
+            if (!validateTemplate(method, template)) {
                 hasErrors = true;
                 continue;
             }
             TypeElement enclosing = (TypeElement) method.getEnclosingElement();
             methodsByType.computeIfAbsent(enclosing, key -> new ArrayList<>()).add(method);
         }
-        if (hasErrors) {
-            return true;
+        return hasErrors;
+    }
+
+    private boolean processSqlConst(RoundEnvironment roundEnv) {
+        boolean hasErrors = false;
+        for (Element element : roundEnv.getElementsAnnotatedWith(SqlConst.class)) {
+            if (element.getKind() != ElementKind.FIELD && element.getKind() != ElementKind.LOCAL_VARIABLE) {
+                error(element, "@SqlConst can only be applied to fields or local variables");
+                hasErrors = true;
+                continue;
+            }
+            if (element.getKind() == ElementKind.FIELD) {
+                if (!element.getModifiers().containsAll(Set.of(Modifier.STATIC, Modifier.FINAL))) {
+                    error(element, "@SqlConst requires a static final field");
+                    hasErrors = true;
+                    continue;
+                }
+            } else {
+                if (!element.getModifiers().contains(Modifier.FINAL)) {
+                    error(element, "@SqlConst requires a final local variable");
+                    hasErrors = true;
+                    continue;
+                }
+            }
+            if (!element.asType().toString().equals(String.class.getName())) {
+                error(element, "@SqlConst requires a String constant");
+                hasErrors = true;
+                continue;
+            }
+            VariableElement variable = (VariableElement) element;
+            Object constant = variable.getConstantValue();
+            if (!(constant instanceof String sql)) {
+                error(element, "@SqlConst requires a compile-time constant String");
+                hasErrors = true;
+                continue;
+            }
+            if (!validateTemplate(element, sql)) {
+                hasErrors = true;
+            }
         }
-        for (Map.Entry<TypeElement, List<ExecutableElement>> entry : methodsByType.entrySet()) {
-            generateTemplateClass(entry.getKey(), entry.getValue());
-        }
-        return true;
+        return hasErrors;
     }
 
     private void generateTemplateClass(TypeElement type, List<ExecutableElement> methods) {
@@ -152,5 +205,15 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
 
     private void error(Element element, String message) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
+    }
+
+    private boolean validateTemplate(Element element, String template) {
+        try {
+            io.lighting.lumen.template.SqlTemplate.parse(template);
+            return true;
+        } catch (RuntimeException ex) {
+            error(element, "Invalid SQL template: " + ex.getMessage());
+            return false;
+        }
     }
 }
