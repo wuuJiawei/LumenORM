@@ -351,6 +351,9 @@ public interface FunctionRenderer {
 
 ## 10. 执行层：JDBC Executor 与映射
 
+> **MVP 现状**：已提供 `JdbcExecutor` + `RowMapper`，直接执行 `RenderedSql`。
+> `Db/Query/Command/run(...)` 仍按路线图推进，将在模板解析里程碑补齐。
+
 ### 10.1 执行 API
 
 ```java
@@ -675,4 +678,3 @@ interface Db {
   int execute(Command command);
 }
 ```
-

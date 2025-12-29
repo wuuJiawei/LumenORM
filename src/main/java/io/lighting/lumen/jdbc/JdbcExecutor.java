@@ -1,0 +1,69 @@
+package io.lighting.lumen.jdbc;
+
+import io.lighting.lumen.sql.Bind;
+import io.lighting.lumen.sql.RenderedSql;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import javax.sql.DataSource;
+
+public final class JdbcExecutor {
+    private final DataSource dataSource;
+
+    public JdbcExecutor(DataSource dataSource) {
+        this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+    }
+
+    public <T> List<T> fetch(RenderedSql renderedSql, RowMapper<T> mapper) throws SQLException {
+        Objects.requireNonNull(renderedSql, "renderedSql");
+        Objects.requireNonNull(mapper, "mapper");
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(renderedSql.sql())) {
+            bind(statement, renderedSql.binds());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<T> results = new ArrayList<>();
+                while (resultSet.next()) {
+                    results.add(mapper.map(resultSet));
+                }
+                return results;
+            }
+        }
+    }
+
+    public int execute(RenderedSql renderedSql) throws SQLException {
+        Objects.requireNonNull(renderedSql, "renderedSql");
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(renderedSql.sql())) {
+            bind(statement, renderedSql.binds());
+            return statement.executeUpdate();
+        }
+    }
+
+    private void bind(PreparedStatement statement, List<Bind> binds) throws SQLException {
+        for (int i = 0; i < binds.size(); i++) {
+            int index = i + 1;
+            Bind bind = binds.get(i);
+            if (bind instanceof Bind.Value value) {
+                if (value.jdbcType() == 0) {
+                    statement.setObject(index, value.value());
+                } else {
+                    statement.setObject(index, value.value(), value.jdbcType());
+                }
+            } else if (bind instanceof Bind.NullValue nullValue) {
+                int jdbcType = nullValue.jdbcType();
+                if (jdbcType == 0) {
+                    statement.setNull(index, Types.NULL);
+                } else {
+                    statement.setNull(index, jdbcType);
+                }
+            } else {
+                throw new IllegalArgumentException("Unsupported bind: " + bind.getClass().getSimpleName());
+            }
+        }
+    }
+}
