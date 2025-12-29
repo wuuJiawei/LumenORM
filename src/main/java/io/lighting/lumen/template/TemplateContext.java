@@ -5,6 +5,7 @@ import io.lighting.lumen.meta.IdentifierMacros;
 import io.lighting.lumen.sql.Dialect;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -158,7 +159,10 @@ public final class TemplateContext {
             return null;
         }
         try {
-            Method method = target.getClass().getMethod(methodName);
+            Method method = findInvokableMethod(target.getClass(), methodName);
+            if (method == null) {
+                throw new IllegalArgumentException("Unknown method: " + methodName);
+            }
             return method.invoke(target);
         } catch (ReflectiveOperationException ex) {
             throw new IllegalArgumentException(
@@ -166,6 +170,56 @@ public final class TemplateContext {
                 ex
             );
         }
+    }
+
+    private Method findInvokableMethod(Class<?> type, String methodName) {
+        Method direct = findPublicMethod(type, methodName);
+        if (direct != null && Modifier.isPublic(direct.getDeclaringClass().getModifiers())) {
+            return direct;
+        }
+        Method interfaceMethod = findPublicInterfaceMethod(type, methodName);
+        if (interfaceMethod != null) {
+            return interfaceMethod;
+        }
+        for (Class<?> current = type.getSuperclass(); current != null; current = current.getSuperclass()) {
+            Method inherited = findPublicMethod(current, methodName);
+            if (inherited != null && Modifier.isPublic(inherited.getDeclaringClass().getModifiers())) {
+                return inherited;
+            }
+            Method inheritedInterface = findPublicInterfaceMethod(current, methodName);
+            if (inheritedInterface != null) {
+                return inheritedInterface;
+            }
+        }
+        return null;
+    }
+
+    private Method findPublicMethod(Class<?> type, String methodName) {
+        if (!Modifier.isPublic(type.getModifiers())) {
+            return null;
+        }
+        try {
+            return type.getMethod(methodName);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
+    private Method findPublicInterfaceMethod(Class<?> type, String methodName) {
+        for (Class<?> iface : type.getInterfaces()) {
+            if (Modifier.isPublic(iface.getModifiers())) {
+                try {
+                    return iface.getMethod(methodName);
+                } catch (NoSuchMethodException ignored) {
+                    // continue
+                }
+            }
+            Method nested = findPublicInterfaceMethod(iface, methodName);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
     }
 
 }

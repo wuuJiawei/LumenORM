@@ -78,6 +78,26 @@ class FluentDslTest {
         );
     }
 
+    @Test
+    void skipsWhereWhenPredicateBuilderEmpty() {
+        Dsl dsl = new Dsl(registry);
+        Table orders = dsl.table(OrderEntity.class).as("o");
+
+        RenderedSql rendered = renderer.render(
+            dsl.select(orders.col("id").select())
+                .from(orders)
+                .where(where -> { })
+                .build(),
+            Bindings.empty()
+        );
+
+        assertEquals(
+            "SELECT \"o\".\"id\" FROM \"orders\" \"o\"",
+            rendered.sql()
+        );
+        assertEquals(List.of(), rendered.binds());
+    }
+
     @io.lighting.lumen.meta.Table(name = "orders")
     private static final class OrderEntity {
         @Id
