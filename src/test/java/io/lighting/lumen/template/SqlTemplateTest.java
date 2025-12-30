@@ -143,6 +143,26 @@ class SqlTemplateTest {
             () -> sqlTemplate.render(context(Bindings.of("sort", "BAD"))));
     }
 
+    @Test
+    void rejectsParamInFromClause() {
+        String template = "SELECT * FROM :table";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> sqlTemplate.render(context(Bindings.of("table", "orders"))));
+    }
+
+    @Test
+    void rejectsParamInOrderByClause() {
+        String template = "SELECT * FROM orders o ORDER BY :sort";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> sqlTemplate.render(context(Bindings.of("sort", "created_at"))));
+    }
+
     private TemplateContext context(Bindings bindings) {
         return new TemplateContext(
             bindings.asMap(),

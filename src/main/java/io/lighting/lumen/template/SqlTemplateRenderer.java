@@ -89,6 +89,7 @@ final class SqlTemplateRenderer {
         StringBuilder sql,
         List<Bind> binds
     ) {
+        ensureParamNotIdentifierPosition(sql);
         Object value = expression.evaluate(context);
         sql.append('?');
         if (value instanceof Bind bind) {
@@ -277,5 +278,90 @@ final class SqlTemplateRenderer {
             return;
         }
         sql.append(fragment.substring(start));
+    }
+
+    private void ensureParamNotIdentifierPosition(StringBuilder sql) {
+        TokenCursor cursor = new TokenCursor(sql);
+        char last = cursor.peekNonWhitespace();
+        if (last == '\0') {
+            return;
+        }
+        if (last == '.' || last == '"' || last == '`' || last == '[') {
+            throw new IllegalArgumentException("Parameters are not allowed in identifier positions");
+        }
+        Token lastToken = cursor.readToken();
+        if (lastToken == null) {
+            return;
+        }
+        String lastUpper = lastToken.value.toUpperCase();
+        if (isIdentifierKeyword(lastUpper)) {
+            throw new IllegalArgumentException("Parameters are not allowed in identifier positions");
+        }
+        if ("BY".equals(lastUpper)) {
+            Token prev = cursor.readToken();
+            if (prev != null) {
+                String prevUpper = prev.value.toUpperCase();
+                if ("ORDER".equals(prevUpper) || "GROUP".equals(prevUpper)) {
+                    throw new IllegalArgumentException("Parameters are not allowed in identifier positions");
+                }
+            }
+        }
+        Token prev = cursor.readToken();
+        if (prev != null && isIdentifierKeyword(prev.value.toUpperCase())) {
+            throw new IllegalArgumentException("Parameters are not allowed in identifier positions");
+        }
+    }
+
+    private boolean isIdentifierKeyword(String token) {
+        return switch (token) {
+            case "FROM", "JOIN", "UPDATE", "INTO", "TABLE", "SET" -> true;
+            default -> false;
+        };
+    }
+
+    private static final class TokenCursor {
+        private final StringBuilder sql;
+        private int index;
+
+        private TokenCursor(StringBuilder sql) {
+            this.sql = sql;
+            this.index = sql.length() - 1;
+        }
+
+        private char peekNonWhitespace() {
+            int pos = skipWhitespace(index);
+            return pos >= 0 ? sql.charAt(pos) : '\0';
+        }
+
+        private Token readToken() {
+            index = skipWhitespace(index);
+            if (index < 0) {
+                return null;
+            }
+            int end = index;
+            while (index >= 0 && isTokenChar(sql.charAt(index))) {
+                index--;
+            }
+            if (end == index) {
+                return null;
+            }
+            int start = index + 1;
+            return new Token(sql.substring(start, end + 1), start);
+        }
+
+        private int skipWhitespace(int start) {
+            int pos = start;
+            while (pos >= 0 && Character.isWhitespace(sql.charAt(pos))) {
+                pos--;
+            }
+            return pos;
+        }
+
+        private boolean isTokenChar(char ch) {
+            return Character.isLetterOrDigit(ch) || ch == '_';
+        }
+    }
+
+    private record Token(String value, int start) {
     }
 }
