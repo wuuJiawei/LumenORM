@@ -3,6 +3,7 @@ package io.lighting.lumen.db;
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.meta.EntityMetaRegistry;
+import io.lighting.lumen.sql.BatchSql;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.RenderedSql;
@@ -61,6 +62,26 @@ public final class DefaultDb implements Db {
         Objects.requireNonNull(command, "command");
         RenderedSql rendered = renderWithObservers(DbOperation.COMMAND, command, () -> command.render(renderer));
         return executeCommand(DbOperation.COMMAND, command, rendered);
+    }
+
+    @Override
+    public int[] executeBatch(BatchSql batchSql) throws SQLException {
+        Objects.requireNonNull(batchSql, "batchSql");
+        RenderedSql template = batchSql.template();
+        notifyBeforeExecute(DbOperation.COMMAND, batchSql, template);
+        long start = System.nanoTime();
+        try {
+            int[] results = executor.executeBatch(
+                template,
+                batchSql.batches(),
+                batchSql.batchSize()
+            );
+            notifyAfterExecute(DbOperation.COMMAND, batchSql, template, start, results.length);
+            return results;
+        } catch (SQLException ex) {
+            notifyExecuteError(DbOperation.COMMAND, batchSql, template, start, ex);
+            throw ex;
+        }
     }
 
     @Override

@@ -9,4 +9,8 @@ public record RenderedSql(String sql, List<Bind> binds) {
         Objects.requireNonNull(binds, "binds");
         binds = List.copyOf(binds);
     }
+
+    public RenderedSql withBinds(List<Bind> newBinds) {
+        return new RenderedSql(sql, newBinds);
+    }
 }

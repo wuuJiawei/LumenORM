@@ -55,6 +55,46 @@ public final class JdbcExecutor {
         }
     }
 
+    public int[] executeBatch(RenderedSql template, List<List<Bind>> batchBinds, int batchSize) throws SQLException {
+        Objects.requireNonNull(template, "template");
+        Objects.requireNonNull(batchBinds, "batchBinds");
+        if (batchSize < 1) {
+            throw new IllegalArgumentException("batchSize must be >= 1");
+        }
+        if (batchBinds.isEmpty()) {
+            return new int[0];
+        }
+        Connection conn = acquireConnection();
+        try (PreparedStatement statement = conn.prepareStatement(template.sql())) {
+            List<Integer> results = new ArrayList<>();
+            int counter = 0;
+            for (List<Bind> binds : batchBinds) {
+                bind(statement, binds);
+                statement.addBatch();
+                counter++;
+                if (counter == batchSize) {
+                    appendBatchResults(results, statement.executeBatch());
+                    counter = 0;
+                }
+            }
+            if (counter > 0) {
+                appendBatchResults(results, statement.executeBatch());
+            }
+            return results.stream().mapToInt(Integer::intValue).toArray();
+        } finally {
+            releaseConnection(conn);
+        }
+    }
+
+    private void appendBatchResults(List<Integer> results, int[] updates) {
+        if (updates == null) {
+            return;
+        }
+        for (int update : updates) {
+            results.add(update);
+        }
+    }
+
     private Connection acquireConnection() throws SQLException {
         if (connection != null) {
             return connection;

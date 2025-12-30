@@ -1,6 +1,7 @@
 package io.lighting.lumen.db;
 
 import io.lighting.lumen.jdbc.RowMapper;
+import io.lighting.lumen.sql.BatchSql;
 import io.lighting.lumen.sql.Bindings;
 import java.sql.SQLException;
 import java.util.List;
@@ -9,6 +10,8 @@ public interface Db {
     <T> List<T> fetch(Query query, RowMapper<T> mapper) throws SQLException;
 
     int execute(Command command) throws SQLException;
+
+    int[] executeBatch(BatchSql batchSql) throws SQLException;
 
     <T> List<T> run(String sqlText, Bindings bindings, RowMapper<T> mapper) throws SQLException;
 }

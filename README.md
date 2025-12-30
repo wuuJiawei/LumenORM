@@ -466,6 +466,19 @@ tx.inTransaction(db -> {
 });
 ```
 
+### 10.6 批量执行 API
+
+```java
+RenderedSql template = new RenderedSql("UPDATE t SET v=?", List.of());
+BatchSql batch = BatchSql.builder(template)
+    .add(List.of(new Bind.Value(1, 0)))
+    .add(List.of(new Bind.Value(2, 0)))
+    .batchSize(500)
+    .build();
+
+int[] results = db.executeBatch(batch);
+```
+
 ---
 
 ## 11. 编译期检查与生成（APT）
