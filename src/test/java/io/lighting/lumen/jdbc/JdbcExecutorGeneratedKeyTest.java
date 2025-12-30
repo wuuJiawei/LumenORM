@@ -20,7 +20,7 @@ class JdbcExecutorGeneratedKeyTest {
 
     @Test
     void returnsGeneratedKey() throws SQLException {
-        ResultSetHandler keys = new ResultSetHandler(List.of(new Object[] { 10L }));
+        ResultSetHandler keys = new ResultSetHandler(List.<Object[]>of(new Object[] { 10L }));
         PreparedStatementHandler statementHandler = new PreparedStatementHandler(keys.proxy());
         ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler);
         JdbcExecutor executor = new JdbcExecutor(new DataSourceHandler(connectionHandler.proxy()).proxy());
@@ -37,7 +37,7 @@ class JdbcExecutorGeneratedKeyTest {
 
     @Test
     void throwsWhenNoGeneratedKey() throws SQLException {
-        ResultSetHandler keys = new ResultSetHandler(List.of());
+        ResultSetHandler keys = new ResultSetHandler(List.<Object[]>of());
         PreparedStatementHandler statementHandler = new PreparedStatementHandler(keys.proxy());
         ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler);
         JdbcExecutor executor = new JdbcExecutor(new DataSourceHandler(connectionHandler.proxy()).proxy());

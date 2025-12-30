@@ -405,8 +405,8 @@ public interface Dialect {
 
 ## 10. 执行层：JDBC Executor 与映射
 
-> **MVP 现状**：已提供 `JdbcExecutor` + `RowMapper`，直接执行 `RenderedSql`。
-> `Db/Query/Command/run(...)` 仍按路线图推进，将在模板解析里程碑补齐。
+> **现状**：已提供 `JdbcExecutor`、`Db/Query/Command`、批量/流式执行、
+> 生成主键与乐观锁辅助，覆盖查询与写入的主路径。
 
 ### 10.1 执行 API
 
@@ -414,6 +414,10 @@ public interface Dialect {
 public interface Db {
   <T> List<T> fetch(Query query, RowMapper<T> mapper);
   int execute(Command command);
+  int executeOptimistic(Command command); // 影响行数 != 1 时抛 OptimisticLockException
+  <T> T executeAndReturnGeneratedKey(Command command, String columnLabel, GeneratedKeyMapper<T> mapper);
+  int[] executeBatch(BatchSql batchSql);
+  <T> ResultStream<T> fetchStream(Query query, RowMapper<T> mapper, int fetchSize);
   <T> List<T> run(String sqlTextBlock, Bindings bindings, RowMapper<T> mapper); // 运行时路径
 }
 ```
@@ -431,20 +435,17 @@ public interface Db {
 2. `Record/DTO` 反射映射（开发效率高）；
 3. APT 生成映射（高性能、强校验）。
 
-### 10.3 写入与批量执行（规划）
+### 10.3 写入与批量执行（现状）
 
-补齐增删改与大数据量批处理能力，建议拆成以下路线：
+已实现的核心能力：
 
-1. **DML AST + Renderer**：新增 `InsertStmt/UpdateStmt/DeleteStmt`，统一绑定模型与渲染规则。
+1. **DML AST + Renderer**：`InsertStmt/UpdateStmt/DeleteStmt`，统一绑定模型与渲染规则。
 2. **写入 DSL**：`insertInto(table).values(...)`、`update(table).set(...).where(...)`、`deleteFrom(table).where(...)`。
-3. **批量执行 API**：在 `Db` 上提供 `executeBatch(...)` 或 `BatchCommand`，支持：
-   * `PreparedStatement.addBatch()` + 批量大小控制；
-   * 多行 `INSERT INTO ... VALUES (...), (...), ...`（按 Dialect 能力选择）。
-4. **大数据量优化**：
-   * 读：`fetchStream` / `Iterator` 风格执行，允许 `fetchSize` 与游标；
-   * 写：按批次切分（如 500/1000 行），提供可配置的批量大小与事务边界；
-   * 可选：Dialect 专属批量通道（如 PostgreSQL `COPY`、MySQL `LOAD DATA`）。
-5. **增强语义**（后续）：返回自增主键、乐观锁 `version` 支持、`upsert`（按 Dialect 定义）。
+3. **批量执行 API**：`BatchSql + executeBatch(...)`，支持批量大小控制。
+4. **读写优化**：`fetchStream` 支持大结果集读取，写入可按批次切分。
+5. **增强语义**：`executeAndReturnGeneratedKey(...)` 与 `executeOptimistic(...)`。
+
+后续增强方向：Dialect 专属批量通道、`upsert` 等。
 
 ### 10.4 可观测性 Hook（渲染/执行）
 

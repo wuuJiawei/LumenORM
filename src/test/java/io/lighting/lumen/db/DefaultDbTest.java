@@ -1,6 +1,7 @@
 package io.lighting.lumen.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
@@ -88,6 +89,36 @@ class DefaultDbTest {
         assertEquals(2, updated);
         assertEquals("UPDATE t SET name=?", sqlCapture.get());
         assertEquals(List.of(new BoundParam("lamp", 0, "setObject")), statementHandler.boundParams());
+    }
+
+    @Test
+    void executeOptimisticReturnsWhenSingleRowUpdated() throws SQLException {
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of());
+        PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 1);
+        ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), new AtomicReference<>());
+        DefaultDb db = createDb(connectionHandler.proxy());
+        RenderedSql renderedSql = new RenderedSql(
+            "UPDATE t SET name=?",
+            List.of(new Bind.Value("lamp", 0))
+        );
+
+        int updated = db.executeOptimistic(Command.of(renderedSql));
+
+        assertEquals(1, updated);
+    }
+
+    @Test
+    void executeOptimisticThrowsWhenRowCountMismatch() throws SQLException {
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of());
+        PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 0);
+        ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), new AtomicReference<>());
+        DefaultDb db = createDb(connectionHandler.proxy());
+        RenderedSql renderedSql = new RenderedSql(
+            "UPDATE t SET name=?",
+            List.of(new Bind.Value("lamp", 0))
+        );
+
+        assertThrows(OptimisticLockException.class, () -> db.executeOptimistic(Command.of(renderedSql)));
     }
 
     @Test

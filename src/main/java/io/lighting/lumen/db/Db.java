@@ -13,6 +13,14 @@ public interface Db {
 
     int execute(Command command) throws SQLException;
 
+    default int executeOptimistic(Command command) throws SQLException {
+        int updated = execute(command);
+        if (updated != 1) {
+            throw new OptimisticLockException("Optimistic lock expected 1 row but got " + updated);
+        }
+        return updated;
+    }
+
     int[] executeBatch(BatchSql batchSql) throws SQLException;
 
     <T> ResultStream<T> fetchStream(Query query, RowMapper<T> mapper, int fetchSize) throws SQLException;
