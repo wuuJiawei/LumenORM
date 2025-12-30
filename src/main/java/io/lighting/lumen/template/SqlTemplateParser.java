@@ -220,7 +220,7 @@ final class SqlTemplateParser {
         expect('.');
         String functionName = parseIdentifier();
         String contents = parseParenContents();
-        List<String> args = splitArgs(contents);
+        List<String> args = splitTopLevel(contents, ',');
         List<List<TemplateNode>> nodes = new ArrayList<>();
         for (String arg : args) {
             if (!arg.isBlank()) {

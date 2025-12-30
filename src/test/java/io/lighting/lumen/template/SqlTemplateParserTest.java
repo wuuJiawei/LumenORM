@@ -25,4 +25,17 @@ class SqlTemplateParserTest {
     void rejectsInvalidForSyntax() {
         assertThrows(IllegalArgumentException.class, () -> SqlTemplate.parse("@for(x y){ SELECT 1 }"));
     }
+
+    @Test
+    void rejectsOrderByWithoutAllowedMappings() {
+        assertThrows(IllegalArgumentException.class, () -> SqlTemplate.parse("@orderBy(:sort)"));
+    }
+
+    @Test
+    void rejectsOrderByDefaultMissingInAllowed() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> SqlTemplate.parse("@orderBy(:sort, allowed = { ID_ASC : id ASC }, default = CREATED_DESC)")
+        );
+    }
 }

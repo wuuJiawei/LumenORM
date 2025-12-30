@@ -79,6 +79,8 @@ final class SqlTemplateRenderer {
             appendPage(pageNode, context, sql, binds);
         } else if (node instanceof FnNode fnNode) {
             appendFunction(fnNode, context, sql, binds);
+        } else if (node instanceof OrderByNode orderByNode) {
+            appendOrderBy(orderByNode, context, sql, binds);
         } else {
             throw new IllegalArgumentException("Unsupported template node: " + node.getClass().getSimpleName());
         }
@@ -155,6 +157,35 @@ final class SqlTemplateRenderer {
         binds.addAll(rendered.binds());
     }
 
+    private void appendOrderBy(
+        OrderByNode orderByNode,
+        TemplateContext context,
+        StringBuilder sql,
+        List<Bind> binds
+    ) {
+        String selection = resolveOrderKey(orderByNode.selection().evaluate(context));
+        if (selection == null) {
+            selection = orderByNode.defaultKey();
+        }
+        if (selection == null) {
+            return;
+        }
+        List<TemplateNode> allowedNodes = orderByNode.allowed().get(selection);
+        if (allowedNodes == null) {
+            throw new IllegalArgumentException("@orderBy selection not allowed: " + selection);
+        }
+        RenderedSql fragment = renderToSql(allowedNodes, context);
+        if (!fragment.binds().isEmpty()) {
+            throw new IllegalArgumentException("@orderBy fragments must not use parameters");
+        }
+        String trimmed = stripOrderByPrefix(fragment.sql().trim());
+        if (trimmed.isBlank()) {
+            return;
+        }
+        appendSql(sql, " ORDER BY " + trimmed);
+        binds.addAll(fragment.binds());
+    }
+
     private RenderedSql renderToSql(List<TemplateNode> nodes, TemplateContext context) {
         StringBuilder sql = new StringBuilder();
         List<Bind> binds = new ArrayList<>();
@@ -197,6 +228,37 @@ final class SqlTemplateRenderer {
             return stripKeyword(trimmed, 2);
         }
         return trimmed;
+    }
+
+    private String stripOrderByPrefix(String input) {
+        String trimmed = input.trim();
+        String upper = trimmed.toUpperCase();
+        if (!upper.startsWith("ORDER BY")) {
+            return trimmed;
+        }
+        int length = "ORDER BY".length();
+        if (trimmed.length() == length) {
+            return "";
+        }
+        char next = trimmed.charAt(length);
+        if (Character.isWhitespace(next)) {
+            return trimmed.substring(length + 1).trim();
+        }
+        return trimmed;
+    }
+
+    private String resolveOrderKey(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof CharSequence sequence) {
+            String key = sequence.toString().trim();
+            return key.isEmpty() ? null : key;
+        }
+        if (value instanceof Enum<?> enumValue) {
+            return enumValue.name();
+        }
+        return value.toString();
     }
 
     private String stripKeyword(String trimmed, int keywordLength) {

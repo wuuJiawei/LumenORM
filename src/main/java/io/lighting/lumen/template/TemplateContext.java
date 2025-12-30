@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public final class TemplateContext {
         FunctionRegistry functionRegistry,
         Deque<Map.Entry<String, Object>> locals
     ) {
-        this.values = Map.copyOf(values);
+        this.values = Collections.unmodifiableMap(new java.util.LinkedHashMap<>(values));
         this.dialect = Objects.requireNonNull(dialect, "dialect");
         this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
         this.macros = new IdentifierMacros(this.metaRegistry);

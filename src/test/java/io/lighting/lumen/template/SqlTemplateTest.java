@@ -1,6 +1,7 @@
 package io.lighting.lumen.template;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
@@ -113,6 +114,41 @@ class SqlTemplateTest {
         assertEquals(List.of(), rendered.binds());
     }
 
+    @Test
+    void rendersOrderBySelectionFromWhitelist() {
+        String template = "SELECT * FROM orders o "
+            + "@orderBy(:sort, allowed = { CREATED_DESC : o.created_at DESC, ID_ASC : o.id ASC }, "
+            + "default = CREATED_DESC)";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+        RenderedSql rendered = sqlTemplate.render(context(Bindings.of("sort", Sort.ID_ASC)));
+
+        assertEquals("SELECT * FROM orders o ORDER BY o.id ASC", rendered.sql());
+        assertEquals(List.of(), rendered.binds());
+    }
+
+    @Test
+    void rendersOrderByDefaultWhenSelectionNull() {
+        String template = "SELECT * FROM orders o "
+            + "@orderBy(:sort, allowed = { CREATED_DESC : o.created_at DESC, ID_ASC : o.id ASC }, "
+            + "default = CREATED_DESC)";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+        RenderedSql rendered = sqlTemplate.render(context(Bindings.of("sort", null)));
+
+        assertEquals("SELECT * FROM orders o ORDER BY o.created_at DESC", rendered.sql());
+        assertEquals(List.of(), rendered.binds());
+    }
+
+    @Test
+    void rejectsUnknownOrderBySelection() {
+        String template = "SELECT * FROM orders o "
+            + "@orderBy(:sort, allowed = { CREATED_DESC : o.created_at DESC }, default = CREATED_DESC)";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> sqlTemplate.render(context(Bindings.of("sort", "BAD"))));
+    }
+
     private TemplateContext context(Bindings bindings) {
         return context(bindings, FunctionRegistry.standard());
     }
@@ -135,5 +171,10 @@ class SqlTemplateTest {
 
         @Column(name = "status")
         private String status;
+    }
+
+    private enum Sort {
+        CREATED_DESC,
+        ID_ASC
     }
 }

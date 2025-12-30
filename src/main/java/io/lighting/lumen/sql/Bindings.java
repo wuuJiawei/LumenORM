@@ -1,5 +1,6 @@
 package io.lighting.lumen.sql;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -8,7 +9,7 @@ public final class Bindings {
     private final Map<String, Object> values;
 
     private Bindings(Map<String, Object> values) {
-        this.values = Map.copyOf(values);
+        this.values = Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
     public static Bindings empty() {

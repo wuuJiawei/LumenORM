@@ -98,6 +98,29 @@ class FluentDslTest {
         assertEquals(List.of(), rendered.binds());
     }
 
+    @Test
+    void supportsOrderByWhitelistSelection() {
+        Dsl dsl = new Dsl(registry);
+        Table orders = dsl.table(OrderEntity.class).as("o");
+
+        RenderedSql rendered = renderer.render(
+            dsl.select(orders.col("id").select())
+                .from(orders)
+                .orderBy(order -> order
+                    .allow(Sort.CREATED_DESC, orders.col("createdAt").desc())
+                    .allow(Sort.ID_ASC, orders.col("id").asc())
+                    .use(Sort.ID_ASC, Sort.CREATED_DESC))
+                .build(),
+            Bindings.empty()
+        );
+
+        assertEquals(
+            "SELECT \"o\".\"id\" FROM \"orders\" \"o\" ORDER BY \"o\".\"id\" ASC",
+            rendered.sql()
+        );
+        assertEquals(List.of(), rendered.binds());
+    }
+
     @io.lighting.lumen.meta.Table(name = "orders")
     private static final class OrderEntity {
         @Id
@@ -122,5 +145,10 @@ class FluentDslTest {
 
         @Column(name = "name")
         private String name;
+    }
+
+    private enum Sort {
+        CREATED_DESC,
+        ID_ASC
     }
 }
