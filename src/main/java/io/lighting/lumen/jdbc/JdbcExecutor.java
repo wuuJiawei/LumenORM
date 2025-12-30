@@ -55,6 +55,33 @@ public final class JdbcExecutor {
         }
     }
 
+    public <T> ResultStream<T> fetchStream(RenderedSql renderedSql, RowMapper<T> mapper, int fetchSize)
+        throws SQLException {
+        Objects.requireNonNull(renderedSql, "renderedSql");
+        Objects.requireNonNull(mapper, "mapper");
+        if (fetchSize < 1) {
+            throw new IllegalArgumentException("fetchSize must be >= 1");
+        }
+        Connection conn = acquireConnection();
+        boolean closeConnection = connection == null;
+        try {
+            PreparedStatement statement = conn.prepareStatement(renderedSql.sql());
+            statement.setFetchSize(fetchSize);
+            bind(statement, renderedSql.binds());
+            ResultSet resultSet = statement.executeQuery();
+            return new ResultStream<>(conn, statement, resultSet, mapper, closeConnection);
+        } catch (SQLException ex) {
+            if (closeConnection) {
+                try {
+                    conn.close();
+                } catch (SQLException ignored) {
+                    // ignore close failure
+                }
+            }
+            throw ex;
+        }
+    }
+
     public int[] executeBatch(RenderedSql template, List<List<Bind>> batchBinds, int batchSize) throws SQLException {
         Objects.requireNonNull(template, "template");
         Objects.requireNonNull(batchBinds, "batchBinds");

@@ -479,6 +479,17 @@ BatchSql batch = BatchSql.builder(template)
 int[] results = db.executeBatch(batch);
 ```
 
+### 10.7 大结果集流式读取
+
+```java
+try (ResultStream<Row> stream = db.fetchStream(query, mapper, 500)) {
+  while (stream.next()) {
+    Row row = stream.row();
+    // handle row
+  }
+}
+```
+
 ---
 
 ## 11. 编译期检查与生成（APT）

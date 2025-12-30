@@ -2,6 +2,7 @@ package io.lighting.lumen.db;
 
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.jdbc.RowMapper;
+import io.lighting.lumen.jdbc.ResultStream;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.sql.BatchSql;
 import io.lighting.lumen.sql.Bindings;
@@ -80,6 +81,23 @@ public final class DefaultDb implements Db {
             return results;
         } catch (SQLException ex) {
             notifyExecuteError(DbOperation.COMMAND, batchSql, template, start, ex);
+            throw ex;
+        }
+    }
+
+    @Override
+    public <T> ResultStream<T> fetchStream(Query query, RowMapper<T> mapper, int fetchSize) throws SQLException {
+        Objects.requireNonNull(query, "query");
+        Objects.requireNonNull(mapper, "mapper");
+        RenderedSql rendered = renderWithObservers(DbOperation.QUERY, query, () -> query.render(renderer));
+        notifyBeforeExecute(DbOperation.QUERY, query, rendered);
+        long start = System.nanoTime();
+        try {
+            ResultStream<T> stream = executor.fetchStream(rendered, mapper, fetchSize);
+            notifyAfterExecute(DbOperation.QUERY, query, rendered, start, 0);
+            return stream;
+        } catch (SQLException ex) {
+            notifyExecuteError(DbOperation.QUERY, query, rendered, start, ex);
             throw ex;
         }
     }
