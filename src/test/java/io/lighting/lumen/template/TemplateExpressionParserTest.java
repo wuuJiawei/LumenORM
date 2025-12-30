@@ -2,7 +2,6 @@ package io.lighting.lumen.template;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;

@@ -13,6 +13,7 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.TableRef;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
+import io.lighting.lumen.sql.function.FunctionRegistry;
 import io.lighting.lumen.template.EntityNameResolvers;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationHandler;
@@ -100,7 +101,8 @@ class DefaultDbTest {
             renderer,
             dialect,
             new ReflectionEntityMetaRegistry(),
-            EntityNameResolvers.from(Map.of())
+            EntityNameResolvers.from(Map.of()),
+            FunctionRegistry.standard()
         );
     }
 

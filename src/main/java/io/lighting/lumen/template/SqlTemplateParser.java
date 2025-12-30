@@ -66,6 +66,7 @@ final class SqlTemplateParser {
             case "table" -> parseTable();
             case "col" -> parseColumn();
             case "page" -> parsePage();
+            case "fn" -> parseFn();
             default -> throw new IllegalArgumentException("Unknown directive @" + name);
         };
     }
@@ -136,6 +137,23 @@ final class SqlTemplateParser {
         return new PageNode(parseExpression(page), parseExpression(pageSize));
     }
 
+    private TemplateNode parseFn() {
+        skipWhitespace();
+        expect('.');
+        String functionName = parseIdentifier();
+        String contents = parseParenContents();
+        List<String> args = splitArgs(contents);
+        List<List<TemplateNode>> nodes = new ArrayList<>();
+        for (String arg : args) {
+            if (!arg.isBlank()) {
+                nodes.add(new SqlTemplateParser(arg).parse().nodes());
+            } else {
+                nodes.add(List.of());
+            }
+        }
+        return new FnNode(functionName, nodes);
+    }
+
     private TemplateNode parseParam() {
         expect(':');
         StringBuilder name = new StringBuilder();
@@ -188,6 +206,54 @@ final class SqlTemplateParser {
         return new TemplateExpressionParser(expr).parse();
     }
 
+    private List<String> splitArgs(String input) {
+        List<String> parts = new ArrayList<>();
+        if (input.isBlank()) {
+            return parts;
+        }
+        int depth = 0;
+        boolean inSingle = false;
+        boolean inDouble = false;
+        StringBuilder current = new StringBuilder();
+        for (int i = 0; i < input.length(); i++) {
+            char ch = input.charAt(i);
+            if (ch == '\\') {
+                current.append(ch);
+                if (i + 1 < input.length()) {
+                    current.append(input.charAt(i + 1));
+                    i++;
+                }
+                continue;
+            }
+            if (ch == '\'' && !inDouble) {
+                inSingle = !inSingle;
+                current.append(ch);
+                continue;
+            }
+            if (ch == '"' && !inSingle) {
+                inDouble = !inDouble;
+                current.append(ch);
+                continue;
+            }
+            if (!inSingle && !inDouble) {
+                if (ch == '(') {
+                    depth++;
+                } else if (ch == ')') {
+                    depth = Math.max(0, depth - 1);
+                } else if (ch == ',' && depth == 0) {
+                    parts.add(current.toString().trim());
+                    current.setLength(0);
+                    continue;
+                }
+            }
+            current.append(ch);
+        }
+        if (current.length() > 0) {
+            parts.add(current.toString().trim());
+        }
+        return parts;
+    }
+
     private int findTopLevelComma(String input) {
         int depth = 0;
         for (int i = 0; i < input.length(); i++) {
@@ -236,6 +302,7 @@ final class SqlTemplateParser {
         }
         index++;
     }
+
 
     private char peek() {
         if (isAtEnd()) {

@@ -3,6 +3,7 @@ package io.lighting.lumen.template;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.IdentifierMacros;
 import io.lighting.lumen.sql.Dialect;
+import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -19,6 +20,7 @@ public final class TemplateContext {
     private final EntityMetaRegistry metaRegistry;
     private final IdentifierMacros macros;
     private final EntityNameResolver entityNameResolver;
+    private final FunctionRegistry functionRegistry;
     private final Deque<Map.Entry<String, Object>> locals;
 
     public TemplateContext(
@@ -27,7 +29,17 @@ public final class TemplateContext {
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver
     ) {
-        this(values, dialect, metaRegistry, entityNameResolver, new ArrayDeque<>());
+        this(values, dialect, metaRegistry, entityNameResolver, FunctionRegistry.standard(), new ArrayDeque<>());
+    }
+
+    public TemplateContext(
+        Map<String, Object> values,
+        Dialect dialect,
+        EntityMetaRegistry metaRegistry,
+        EntityNameResolver entityNameResolver,
+        FunctionRegistry functionRegistry
+    ) {
+        this(values, dialect, metaRegistry, entityNameResolver, functionRegistry, new ArrayDeque<>());
     }
 
     private TemplateContext(
@@ -35,6 +47,7 @@ public final class TemplateContext {
         Dialect dialect,
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver,
+        FunctionRegistry functionRegistry,
         Deque<Map.Entry<String, Object>> locals
     ) {
         this.values = Map.copyOf(values);
@@ -42,6 +55,7 @@ public final class TemplateContext {
         this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
         this.macros = new IdentifierMacros(this.metaRegistry);
         this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+        this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
         this.locals = locals;
     }
 
@@ -49,7 +63,7 @@ public final class TemplateContext {
         Objects.requireNonNull(name, "name");
         Deque<Map.Entry<String, Object>> next = new ArrayDeque<>(locals);
         next.push(Map.entry(name, value));
-        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, next);
+        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, functionRegistry, next);
     }
 
     public Dialect dialect() {
@@ -62,6 +76,10 @@ public final class TemplateContext {
 
     public Class<?> resolveEntity(String name) {
         return entityNameResolver.resolve(name);
+    }
+
+    public FunctionRegistry functionRegistry() {
+        return functionRegistry;
     }
 
     public Object resolvePath(List<PathSegment> segments) {

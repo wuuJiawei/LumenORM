@@ -9,15 +9,22 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.Stmt;
 import io.lighting.lumen.sql.ast.TableRef;
+import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public final class SqlRenderer {
     private final Dialect dialect;
+    private final FunctionRegistry functionRegistry;
 
     public SqlRenderer(Dialect dialect) {
+        this(dialect, FunctionRegistry.standard());
+    }
+
+    public SqlRenderer(Dialect dialect, FunctionRegistry functionRegistry) {
         this.dialect = Objects.requireNonNull(dialect, "dialect");
+        this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
     }
 
     public RenderedSql render(Stmt stmt, Bindings bindings) {
@@ -132,14 +139,16 @@ public final class SqlRenderer {
             sql.append(" LIKE ");
             renderExpr(like.pattern(), bindings, sql, binds);
         } else if (expr instanceof Expr.Func func) {
-            sql.append(func.name()).append('(');
-            for (int i = 0; i < func.args().size(); i++) {
-                if (i > 0) {
-                    sql.append(", ");
-                }
-                renderExpr(func.args().get(i), bindings, sql, binds);
+            List<RenderedSql> args = new ArrayList<>();
+            for (Expr arg : func.args()) {
+                StringBuilder argSql = new StringBuilder();
+                List<Bind> argBinds = new ArrayList<>();
+                renderExpr(arg, bindings, argSql, argBinds);
+                args.add(new RenderedSql(argSql.toString(), argBinds));
             }
-            sql.append(')');
+            RenderedSql rendered = functionRegistry.render(func.name(), args);
+            sql.append(rendered.sql());
+            binds.addAll(rendered.binds());
         } else if (expr instanceof Expr.Param param) {
             Object value = bindings.require(param.name());
             sql.append('?');

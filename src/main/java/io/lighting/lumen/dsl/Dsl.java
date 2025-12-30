@@ -62,4 +62,8 @@ public final class Dsl {
     public static Expr rawSql(String sql) {
         return new Expr.RawSql(sql);
     }
+
+    public static Functions functions() {
+        return new Functions();
+    }
 }

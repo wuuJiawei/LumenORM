@@ -10,6 +10,8 @@ import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
+import io.lighting.lumen.sql.function.DefaultFunctionRegistry;
+import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -95,12 +97,33 @@ class SqlTemplateTest {
         assertEquals(List.of(new Bind.Value("lamp", 0)), rendered.binds());
     }
 
+    @Test
+    void rendersFunctionMacros() {
+        String template = "SELECT @fn.count_distinct(o.id) FROM orders o";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+        DefaultFunctionRegistry registry = new DefaultFunctionRegistry()
+            .register("count_distinct", (name, args) -> {
+                RenderedSql arg = args.get(0);
+                return new RenderedSql("COUNT(DISTINCT " + arg.sql() + ")", arg.binds());
+            });
+
+        RenderedSql rendered = sqlTemplate.render(context(Bindings.empty(), registry));
+
+        assertEquals("SELECT COUNT(DISTINCT o.id) FROM orders o", rendered.sql());
+        assertEquals(List.of(), rendered.binds());
+    }
+
     private TemplateContext context(Bindings bindings) {
+        return context(bindings, FunctionRegistry.standard());
+    }
+
+    private TemplateContext context(Bindings bindings, FunctionRegistry functionRegistry) {
         return new TemplateContext(
             bindings.asMap(),
             dialect,
             registry,
-            EntityNameResolvers.from(Map.of("Order", OrderEntity.class))
+            EntityNameResolvers.from(Map.of("Order", OrderEntity.class)),
+            functionRegistry
         );
     }
 

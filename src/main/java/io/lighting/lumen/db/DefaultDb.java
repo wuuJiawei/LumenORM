@@ -7,6 +7,7 @@ import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.SqlRenderer;
+import io.lighting.lumen.sql.function.FunctionRegistry;
 import io.lighting.lumen.template.EntityNameResolver;
 import io.lighting.lumen.template.SqlTemplate;
 import io.lighting.lumen.template.TemplateContext;
@@ -20,19 +21,22 @@ public final class DefaultDb implements Db {
     private final Dialect dialect;
     private final EntityMetaRegistry metaRegistry;
     private final EntityNameResolver entityNameResolver;
+    private final FunctionRegistry functionRegistry;
 
     public DefaultDb(
         JdbcExecutor executor,
         SqlRenderer renderer,
         Dialect dialect,
         EntityMetaRegistry metaRegistry,
-        EntityNameResolver entityNameResolver
+        EntityNameResolver entityNameResolver,
+        FunctionRegistry functionRegistry
     ) {
         this.executor = Objects.requireNonNull(executor, "executor");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.dialect = Objects.requireNonNull(dialect, "dialect");
         this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
         this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+        this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
     }
 
     @Override
@@ -58,7 +62,8 @@ public final class DefaultDb implements Db {
             bindings.asMap(),
             dialect,
             metaRegistry,
-            entityNameResolver
+            entityNameResolver,
+            functionRegistry
         );
         RenderedSql rendered = template.render(context);
         return executor.fetch(rendered, mapper);

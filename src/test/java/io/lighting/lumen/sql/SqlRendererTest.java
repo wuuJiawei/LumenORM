@@ -13,6 +13,7 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.TableRef;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
+import io.lighting.lumen.sql.function.DefaultFunctionRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
@@ -235,5 +236,34 @@ class SqlRendererTest {
         assertEquals("SELECT 1 FROM \"orders\" \"o\" WHERE \"o\".\"deleted_at\" = ?", rendered.sql());
         assertEquals(1, rendered.binds().size());
         assertInstanceOf(Bind.NullValue.class, rendered.binds().get(0));
+    }
+
+    @Test
+    void renderFunctionsViaRegistry(TestReporter reporter) {
+        DefaultFunctionRegistry registry = new DefaultFunctionRegistry()
+            .register("count_distinct", (name, args) -> {
+                RenderedSql arg = args.get(0);
+                return new RenderedSql("COUNT(DISTINCT " + arg.sql() + ")", arg.binds());
+            });
+        SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""), registry);
+        SelectStmt stmt = new SelectStmt(
+            List.of(new SelectItem(new Expr.Func("count_distinct", List.of(new Expr.Column("o", "id"))), "cnt")),
+            new TableRef("orders", "o"),
+            List.of(),
+            null,
+            List.of(),
+            null,
+            List.of(),
+            null
+        );
+
+        RenderedSql rendered = renderer.render(stmt, Bindings.empty());
+        reporter.publishEntry("sql", rendered.sql());
+
+        assertEquals(
+            "SELECT COUNT(DISTINCT \"o\".\"id\") AS \"cnt\" FROM \"orders\" \"o\"",
+            rendered.sql()
+        );
+        assertEquals(0, rendered.binds().size());
     }
 }

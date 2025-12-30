@@ -77,6 +77,8 @@ final class SqlTemplateRenderer {
             appendSql(sql, macros.column(entity, columnNode.fieldName()));
         } else if (node instanceof PageNode pageNode) {
             appendPage(pageNode, context, sql, binds);
+        } else if (node instanceof FnNode fnNode) {
+            appendFunction(fnNode, context, sql, binds);
         } else {
             throw new IllegalArgumentException("Unsupported template node: " + node.getClass().getSimpleName());
         }
@@ -141,6 +143,16 @@ final class SqlTemplateRenderer {
             appendSql(sql, pagination.sqlFragment());
         }
         binds.addAll(pagination.binds());
+    }
+
+    private void appendFunction(FnNode fnNode, TemplateContext context, StringBuilder sql, List<Bind> binds) {
+        List<RenderedSql> args = new ArrayList<>();
+        for (List<TemplateNode> argNodes : fnNode.args()) {
+            args.add(renderToSql(argNodes, context));
+        }
+        RenderedSql rendered = context.functionRegistry().render(fnNode.name(), args);
+        appendSql(sql, rendered.sql());
+        binds.addAll(rendered.binds());
     }
 
     private RenderedSql renderToSql(List<TemplateNode> nodes, TemplateContext context) {
