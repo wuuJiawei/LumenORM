@@ -105,6 +105,10 @@ final class TemplateExpressionParser {
         if (matchKeyword("false")) {
             return new LiteralExpression(false);
         }
+        if (peek() == ':' && peekNext() == ':' && isIdentifierStart(peekNextNext())) {
+            index += 2;
+            return parseSystemPath();
+        }
         if (peek() == ':' && isIdentifierStart(peekNext())) {
             index++;
         }
@@ -112,6 +116,16 @@ final class TemplateExpressionParser {
             return parsePath();
         }
         throw new IllegalArgumentException("Unexpected token at position " + index + " in expression: " + input);
+    }
+
+    private TemplateExpression parseSystemPath() {
+        List<PathSegment> segments = new ArrayList<>();
+        String systemName = parseIdentifier();
+        segments.add(new PathSegment(TemplateContext.systemBindingKey(systemName), false));
+        while (match(".")) {
+            segments.add(parseSegment());
+        }
+        return new PathExpression(segments);
     }
 
     private TemplateExpression parsePath() {
@@ -233,6 +247,13 @@ final class TemplateExpressionParser {
             return '\0';
         }
         return input.charAt(index + 1);
+    }
+
+    private char peekNextNext() {
+        if (index + 2 >= input.length()) {
+            return '\0';
+        }
+        return input.charAt(index + 2);
     }
 
     private boolean isAtEnd() {

@@ -9,22 +9,15 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.Stmt;
 import io.lighting.lumen.sql.ast.TableRef;
-import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public final class SqlRenderer {
     private final Dialect dialect;
-    private final FunctionRegistry functionRegistry;
 
     public SqlRenderer(Dialect dialect) {
-        this(dialect, FunctionRegistry.standard());
-    }
-
-    public SqlRenderer(Dialect dialect, FunctionRegistry functionRegistry) {
         this.dialect = Objects.requireNonNull(dialect, "dialect");
-        this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
     }
 
     public RenderedSql render(Stmt stmt, Bindings bindings) {
@@ -146,7 +139,7 @@ public final class SqlRenderer {
                 renderExpr(arg, bindings, argSql, argBinds);
                 args.add(new RenderedSql(argSql.toString(), argBinds));
             }
-            RenderedSql rendered = functionRegistry.render(func.name(), args);
+            RenderedSql rendered = dialect.renderFunction(func.name(), args);
             sql.append(rendered.sql());
             binds.addAll(rendered.binds());
         } else if (expr instanceof Expr.Param param) {

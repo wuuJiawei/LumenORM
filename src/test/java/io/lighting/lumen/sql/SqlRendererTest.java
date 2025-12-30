@@ -13,7 +13,6 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.TableRef;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
-import io.lighting.lumen.sql.function.DefaultFunctionRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
@@ -239,13 +238,30 @@ class SqlRendererTest {
     }
 
     @Test
-    void renderFunctionsViaRegistry(TestReporter reporter) {
-        DefaultFunctionRegistry registry = new DefaultFunctionRegistry()
-            .register("count_distinct", (name, args) -> {
+    void renderFunctionsViaDialect(TestReporter reporter) {
+        Dialect dialect = new Dialect() {
+            @Override
+            public String quoteIdent(String ident) {
+                return "\"" + ident + "\"";
+            }
+
+            @Override
+            public String id() {
+                return "test";
+            }
+
+            @Override
+            public RenderedPagination renderPagination(int page, int pageSize, List<OrderItem> orderBy) {
+                return new RenderedPagination("", List.of());
+            }
+
+            @Override
+            public RenderedSql renderFunction(String name, List<RenderedSql> args) {
                 RenderedSql arg = args.get(0);
                 return new RenderedSql("COUNT(DISTINCT " + arg.sql() + ")", arg.binds());
-            });
-        SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""), registry);
+            }
+        };
+        SqlRenderer renderer = new SqlRenderer(dialect);
         SelectStmt stmt = new SelectStmt(
             List.of(new SelectItem(new Expr.Func("count_distinct", List.of(new Expr.Column("o", "id"))), "cnt")),
             new TableRef("orders", "o"),

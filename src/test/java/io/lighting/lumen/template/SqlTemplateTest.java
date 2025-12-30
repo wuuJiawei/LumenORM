@@ -11,8 +11,6 @@ import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
-import io.lighting.lumen.sql.function.DefaultFunctionRegistry;
-import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -99,22 +97,6 @@ class SqlTemplateTest {
     }
 
     @Test
-    void rendersFunctionMacros() {
-        String template = "SELECT @fn.count_distinct(o.id) FROM orders o";
-        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
-        DefaultFunctionRegistry registry = new DefaultFunctionRegistry()
-            .register("count_distinct", (name, args) -> {
-                RenderedSql arg = args.get(0);
-                return new RenderedSql("COUNT(DISTINCT " + arg.sql() + ")", arg.binds());
-            });
-
-        RenderedSql rendered = sqlTemplate.render(context(Bindings.empty(), registry));
-
-        assertEquals("SELECT COUNT(DISTINCT o.id) FROM orders o", rendered.sql());
-        assertEquals(List.of(), rendered.binds());
-    }
-
-    @Test
     void rendersOrderBySelectionFromWhitelist() {
         String template = "SELECT * FROM orders o "
             + "@orderBy(:sort, allowed = { CREATED_DESC : o.created_at DESC, ID_ASC : o.id ASC }, "
@@ -139,6 +121,18 @@ class SqlTemplateTest {
     }
 
     @Test
+    void rendersDialectConditionalBlocks() {
+        String template = "SELECT * FROM orders o "
+            + "@if(::dialect == 'mysql') { LIMIT 1}"
+            + "@if(::dialect == 'oracle') { ROWNUM <= 1}";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+        RenderedSql rendered = sqlTemplate.render(dialectContext("mysql"));
+
+        assertEquals("SELECT * FROM orders o LIMIT 1", rendered.sql());
+        assertEquals(List.of(), rendered.binds());
+    }
+
+    @Test
     void rejectsUnknownOrderBySelection() {
         String template = "SELECT * FROM orders o "
             + "@orderBy(:sort, allowed = { CREATED_DESC : o.created_at DESC }, default = CREATED_DESC)";
@@ -150,16 +144,20 @@ class SqlTemplateTest {
     }
 
     private TemplateContext context(Bindings bindings) {
-        return context(bindings, FunctionRegistry.standard());
-    }
-
-    private TemplateContext context(Bindings bindings, FunctionRegistry functionRegistry) {
         return new TemplateContext(
             bindings.asMap(),
             dialect,
             registry,
-            EntityNameResolvers.from(Map.of("Order", OrderEntity.class)),
-            functionRegistry
+            EntityNameResolvers.from(Map.of("Order", OrderEntity.class))
+        );
+    }
+
+    private TemplateContext dialectContext(String id) {
+        return new TemplateContext(
+            Bindings.empty().asMap(),
+            new LimitOffsetDialect(id, "\""),
+            registry,
+            EntityNameResolvers.from(Map.of("Order", OrderEntity.class))
         );
     }
 

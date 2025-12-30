@@ -219,6 +219,7 @@ public final class QOrder {
 
 ```java
 public interface Dialect {
+  String id();
   String quoteIdent(String ident);
 
   /**
@@ -226,6 +227,8 @@ public interface Dialect {
    * 若数据库要求 ORDER BY 才允许 OFFSET/FETCH，应在渲染阶段校验并报错。
    */
   RenderedPagination renderPagination(int page, int pageSize, List<OrderItem> orderBy);
+
+  default RenderedSql renderFunction(String name, List<RenderedSql> args) { ... }
 }
 
 public record RenderedPagination(String sqlFragment, List<Bind> binds) {}
@@ -235,6 +238,7 @@ public record RenderedPagination(String sqlFragment, List<Bind> binds) {}
 
 ```java
 public final class LimitOffsetDialect implements Dialect {
+  @Override public String id() { return "mysql"; }
   @Override public String quoteIdent(String ident) { return "`" + ident + "`"; } // MySQL 示例
 
   @Override
@@ -246,7 +250,7 @@ public final class LimitOffsetDialect implements Dialect {
 }
 ```
 
-> 说明：SQL Server/Oracle 等可另写方言，仅在分页与 quoting 处体现差异；函数差异不进入方言层。
+> 说明：SQL Server/Oracle 等可另写方言；函数差异由 `renderFunction` 处理（如需覆盖）。
 
 ---
 
@@ -271,13 +275,25 @@ public final class LimitOffsetDialect implements Dialect {
 * 表名/列名/排序片段只能来自 `@table/@col/@orderBy.allowed`，禁止 `:param` 直接出现在标识符位置。
 * `RawSql` 需显式启用，并要求审计 hook（默认禁用）。
 
+### 7.3 系统内置变量（条件编译）
+
+提供 `::dialect` 作为系统只读变量，用于按方言选择 SQL 片段：
+
+```sql
+SELECT * FROM orders
+@if(::dialect == 'mysql') { LIMIT 1, 1 }
+@if(::dialect == 'oracle') { ROWNUM <= 1 }
+```
+
+`::dialect` 的值来自 `Dialect.id()`，默认由方言实现决定。
+
 ### 7.3 模板编译策略（原理）
 
 模板不是“字符串宏替换器”，而是编译为 AST：
 
 1. **Tokenize**：识别 SQL 文本片段、`:param`、`@directive(...)`、`{}` 块。
 2. **Build Template AST**：节点包括 `TextNode`、`ParamNode`、`IfNode`、`ForNode`、`WhereBlock` 等。
-3. **Expand**：在给定 `BindContext`（参数值、元模型、排序选择）下展开成 SQL AST 或 QueryPart 列表。
+3. **Expand**：在给定 `BindContext`（参数值、元模型、排序选择、方言）下展开成 SQL AST 或 QueryPart 列表。
 4. **Render**：最终由 Renderer 输出 `RenderedSql`。
 
 ---
@@ -288,11 +304,14 @@ public final class LimitOffsetDialect implements Dialect {
 
 * 结构化：避免括号/AND/逗号错误；
 * 可组合：where/join 片段可作为函数返回；
-* 与模板共享函数体系与元模型引用。
+* 与模板共享元模型引用，函数直接写 SQL 或用 `Dsl.function(...)` 构造。
 
 ### 8.2 DSL API（示意）
 
 ```java
+import static io.lighting.lumen.dsl.Dsl.function;
+import static io.lighting.lumen.dsl.Dsl.literal;
+
 var o = QOrder.ORDER.as("o");
 var m = QMerchant.MERCHANT.as("m");
 var oi = QOrderItem.ORDER_ITEM.as("oi");
@@ -302,9 +321,13 @@ Query q = dsl.select(
       o.id().as("order_id"),
       o.orderNo().as("order_no"),
       m.name().as("merchant_name"),
-      fn.coalesce(m.displayName(), m.name()).as("merchant_display_name"),
-      fn.sum(fn.sub(fn.mul(oi.qty(), oi.unitPrice()), fn.coalesce(oi.discount(), lit(0))))
-        .as("gross_amount")
+      function("coalesce", m.displayName(), m.name()).as("merchant_display_name"),
+      function("sum",
+          function("sub",
+              function("mul", oi.qty(), oi.unitPrice()),
+              function("coalesce", oi.discount(), literal(0))
+          )
+      ).as("gross_amount")
     )
     .from(o)
     .leftJoin(m).on(m.id().eq(o.merchantId()))
@@ -312,7 +335,9 @@ Query q = dsl.select(
     .leftJoin(p).on(p.id().eq(oi.productId()))
     .where(w -> {
        if (!f.merchantIds().isEmpty()) w.and(o.merchantId().in(f.merchantIds()));
-       if (f.keyword() != null) w.and(fn.lower(o.orderNo()).like("%" + f.keyword().toLowerCase() + "%"));
+       if (f.keyword() != null) {
+         w.and(function("lower", o.orderNo()).like("%" + f.keyword().toLowerCase() + "%"));
+       }
     })
     .groupBy(o.id(), o.orderNo(), m.name())
     .orderBy(ob -> ob
@@ -324,28 +349,19 @@ Query q = dsl.select(
 
 ---
 
-## 9. 函数体系（@fn / fn.*）：避免方言膨胀的关键
+## 9. 函数使用（直接 SQL + Dialect Hook）
 
-由于 Dialect 不覆盖函数差异，建议将“不可移植点”集中在可控宏/函数层：
+不再内置 `@fn` 或函数包装层。模板里直接写函数名；DSL 里用 `Expr.Func`
+或 `Dsl.function(...)` 构造函数调用。
 
-* `fn.coalesce(a,b)`
-* `fn.lower(x)`
-* `fn.jsonText(json, path)`（可根据 dialect 映射到 `JSON_EXTRACT`/`->>` 等：这是宏层映射，不是 Dialect）
-* `fn.dateTrunc('day', ts)`（宏层映射）
-* `fn.countDistinct(x)`
-
-### 9.1 宏映射策略
-
-提供 `FunctionRegistry`，按数据库类型选择实现：
+Dialect 提供 `renderFunction` 作为唯一扩展点：默认实现按 `name(arg1, arg2)`
+渲染，需要方言适配时由用户自行覆盖。
 
 ```java
-public interface FunctionRenderer {
-  RenderedSql render(String fnName, List<RenderedSql> args, DatabaseProfile profile);
+public interface Dialect {
+  default RenderedSql renderFunction(String name, List<RenderedSql> args) { ... }
 }
 ```
-
-> 这里的“数据库差异”被限制在“函数宏集合”里，而不是散落在任意 SQL 文本里。
-> 你可以只实现你业务需要的宏，避免全覆盖陷阱。
 
 ---
 
@@ -404,7 +420,8 @@ public final class OrderRepo_Impl implements OrderRepo {
   public List<OrderRow> search(Filter filter, String kw, OrderSort sort, int page, int pageSize) {
     // 直接构建 SQL AST 或渲染输出（避免运行时解析模板）
     SelectStmt stmt = ...;
-    RenderedSql rs = renderer.render(stmt, dialect, functionRegistry, metaRegistry, sort, page, pageSize);
+    Bindings bindings = ...;
+    RenderedSql rs = renderer.render(stmt, bindings);
     return executor.fetch(rs, OrderRow.class);
   }
 }
@@ -432,14 +449,14 @@ public interface OrderRepo {
       o.id AS order_id,
       o.order_no AS order_no,
       m.name AS merchant_name,
-      @fn.coalesce(m.display_name, m.name) AS merchant_display_name,
+      coalesce(m.display_name, m.name) AS merchant_display_name,
       o.status,
       o.created_at,
       o.paid_at,
-      @fn.json_text(o.ext_json, '$.channel') AS channel,
-      @fn.date_trunc('day', o.created_at) AS created_day,
-      @fn.count_distinct(oi.id) AS item_count,
-      @fn.sum((oi.qty * oi.unit_price) - @fn.coalesce(oi.discount, 0)) AS gross_amount
+      json_text(o.ext_json, '$.channel') AS channel,
+      date_trunc('day', o.created_at) AS created_day,
+      COUNT(DISTINCT oi.id) AS item_count,
+      sum((oi.qty * oi.unit_price) - coalesce(oi.discount, 0)) AS gross_amount
 
     FROM @table(Order) o
     JOIN @table(Merchant) m   ON m.id = o.merchant_id
@@ -464,9 +481,9 @@ public interface OrderRepo {
 
       @if(filter.keyword != null && filter.keyword != '') {
         AND (
-          @fn.lower(o.order_no) LIKE :kw
-          OR @fn.lower(p.name)  LIKE :kw
-          OR @fn.lower(m.name)  LIKE :kw
+          lower(o.order_no) LIKE :kw
+          OR lower(p.name)  LIKE :kw
+          OR lower(m.name)  LIKE :kw
         )
       }
 
@@ -479,12 +496,12 @@ public interface OrderRepo {
       }
 
       @if(!filter.channels.isEmpty()) {
-        AND @fn.json_text(o.ext_json, '$.channel') IN @in(:filter.channels)
+        AND json_text(o.ext_json, '$.channel') IN @in(:filter.channels)
       }
 
       @if(!filter.anyTags.isEmpty()) {
         AND (
-          @for(tag : filter.anyTags) { @or { @fn.json_contains(p.tags_json, :tag) } }
+          @for(tag : filter.anyTags) { @or { json_contains(p.tags_json, :tag) } }
         )
       }
     }
@@ -515,6 +532,9 @@ public interface OrderRepo {
 ### 12.2 DSL 形式（select/from/leftJoin）
 
 ```java
+import static io.lighting.lumen.dsl.Dsl.function;
+import static io.lighting.lumen.dsl.Dsl.literal;
+
 var o  = QOrder.ORDER.as("o");
 var m  = QMerchant.MERCHANT.as("m");
 var oi = QOrderItem.ORDER_ITEM.as("oi");
@@ -524,15 +544,21 @@ Query q = dsl.select(
       o.id().as("order_id"),
       o.orderNo().as("order_no"),
       m.name().as("merchant_name"),
-      fn.coalesce(m.displayName(), m.name()).as("merchant_display_name"),
+      function("coalesce", m.displayName(), m.name()).as("merchant_display_name"),
       o.status(),
       o.createdAt(),
       o.paidAt(),
-      fn.jsonText(o.extJson(), "$.channel").as("channel"),
-      fn.dateTrunc("day", o.createdAt()).as("created_day"),
-      fn.countDistinct(oi.id()).as("item_count"),
-      fn.sum(fn.sub(fn.mul(oi.qty(), oi.unitPrice()), fn.coalesce(oi.discount(), lit(0))))
-        .as("gross_amount")
+      function("json_text", o.extJson(), literal("$.channel")).as("channel"),
+      function("date_trunc", literal("day"), o.createdAt()).as("created_day"),
+      function("count_distinct", oi.id()).as("item_count"),
+      function(
+        "sum",
+        function(
+          "sub",
+          function("mul", oi.qty(), oi.unitPrice()),
+          function("coalesce", oi.discount(), literal(0))
+        )
+      ).as("gross_amount")
     )
     .from(o)
     .join(m).on(m.id().eq(o.merchantId()))
@@ -549,13 +575,15 @@ Query q = dsl.select(
       if (f.keyword() != null && !f.keyword().isBlank()) {
         String kw = "%" + f.keyword().toLowerCase() + "%";
         w.and(orGroup(g -> g
-          .or(fn.lower(o.orderNo()).like(kw))
-          .or(fn.lower(p.name()).like(kw))
-          .or(fn.lower(m.name()).like(kw))
+          .or(function("lower", o.orderNo()).like(kw))
+          .or(function("lower", p.name()).like(kw))
+          .or(function("lower", m.name()).like(kw))
         ));
       }
 
-      if (!f.channels().isEmpty()) w.and(fn.jsonText(o.extJson(), "$.channel").in(f.channels()));
+      if (!f.channels().isEmpty()) {
+        w.and(function("json_text", o.extJson(), literal("$.channel")).in(f.channels()));
+      }
     })
     .groupBy(o.id(), o.orderNo(), m.name(), m.displayName(), o.status(), o.createdAt(), o.paidAt(), o.extJson())
     .having(h -> {
@@ -564,8 +592,7 @@ Query q = dsl.select(
     .orderBy(ob -> ob
       .allow(OrderSort.CREATED_DESC, o.createdAt().desc())
       .allow(OrderSort.GROSS_DESC, col("gross_amount").desc())
-      .defaultTo(OrderSort.CREATED_DESC)
-      .use(f.sort()))
+      .use(f.sort(), OrderSort.CREATED_DESC))
     .page(f.page(), f.pageSize());
 
 List<OrderRow> rows = db.fetch(q, OrderRowMapper.INSTANCE);

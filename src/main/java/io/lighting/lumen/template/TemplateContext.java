@@ -3,7 +3,6 @@ package io.lighting.lumen.template;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.IdentifierMacros;
 import io.lighting.lumen.sql.Dialect;
-import io.lighting.lumen.sql.function.FunctionRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -16,12 +15,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class TemplateContext {
+    static final String SYSTEM_DIALECT_KEY = "__dialect";
     private final Map<String, Object> values;
     private final Dialect dialect;
     private final EntityMetaRegistry metaRegistry;
     private final IdentifierMacros macros;
     private final EntityNameResolver entityNameResolver;
-    private final FunctionRegistry functionRegistry;
     private final Deque<Map.Entry<String, Object>> locals;
 
     public TemplateContext(
@@ -30,17 +29,7 @@ public final class TemplateContext {
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver
     ) {
-        this(values, dialect, metaRegistry, entityNameResolver, FunctionRegistry.standard(), new ArrayDeque<>());
-    }
-
-    public TemplateContext(
-        Map<String, Object> values,
-        Dialect dialect,
-        EntityMetaRegistry metaRegistry,
-        EntityNameResolver entityNameResolver,
-        FunctionRegistry functionRegistry
-    ) {
-        this(values, dialect, metaRegistry, entityNameResolver, functionRegistry, new ArrayDeque<>());
+        this(values, dialect, metaRegistry, entityNameResolver, new ArrayDeque<>());
     }
 
     private TemplateContext(
@@ -48,15 +37,13 @@ public final class TemplateContext {
         Dialect dialect,
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver,
-        FunctionRegistry functionRegistry,
         Deque<Map.Entry<String, Object>> locals
     ) {
-        this.values = Collections.unmodifiableMap(new java.util.LinkedHashMap<>(values));
         this.dialect = Objects.requireNonNull(dialect, "dialect");
+        this.values = Collections.unmodifiableMap(mergeSystemBindings(values, dialect));
         this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
         this.macros = new IdentifierMacros(this.metaRegistry);
         this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
-        this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
         this.locals = locals;
     }
 
@@ -64,7 +51,7 @@ public final class TemplateContext {
         Objects.requireNonNull(name, "name");
         Deque<Map.Entry<String, Object>> next = new ArrayDeque<>(locals);
         next.push(Map.entry(name, value));
-        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, functionRegistry, next);
+        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, next);
     }
 
     public Dialect dialect() {
@@ -79,8 +66,24 @@ public final class TemplateContext {
         return entityNameResolver.resolve(name);
     }
 
-    public FunctionRegistry functionRegistry() {
-        return functionRegistry;
+    static String systemBindingKey(String name) {
+        if ("dialect".equals(name)) {
+            return SYSTEM_DIALECT_KEY;
+        }
+        throw new IllegalArgumentException("Unknown system binding: " + name);
+    }
+
+    private static Map<String, Object> mergeSystemBindings(Map<String, Object> values, Dialect dialect) {
+        java.util.LinkedHashMap<String, Object> merged = new java.util.LinkedHashMap<>(values);
+        Object dialectId = Objects.requireNonNull(dialect.id(), "dialect.id");
+        if (merged.containsKey(SYSTEM_DIALECT_KEY)) {
+            if (!Objects.equals(merged.get(SYSTEM_DIALECT_KEY), dialectId)) {
+                throw new IllegalArgumentException("Binding name is reserved: " + SYSTEM_DIALECT_KEY);
+            }
+            return merged;
+        }
+        merged.put(SYSTEM_DIALECT_KEY, dialectId);
+        return merged;
     }
 
     public Object resolvePath(List<PathSegment> segments) {

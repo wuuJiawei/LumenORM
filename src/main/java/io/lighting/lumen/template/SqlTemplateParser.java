@@ -66,7 +66,6 @@ final class SqlTemplateParser {
             case "table" -> parseTable();
             case "col" -> parseColumn();
             case "page" -> parsePage();
-            case "fn" -> parseFn();
             case "orderBy" -> parseOrderBy();
             default -> throw new IllegalArgumentException("Unknown directive @" + name);
         };
@@ -213,23 +212,6 @@ final class SqlTemplateParser {
             return trimmed.substring(1, trimmed.length() - 1);
         }
         return trimmed;
-    }
-
-    private TemplateNode parseFn() {
-        skipWhitespace();
-        expect('.');
-        String functionName = parseIdentifier();
-        String contents = parseParenContents();
-        List<String> args = splitTopLevel(contents, ',');
-        List<List<TemplateNode>> nodes = new ArrayList<>();
-        for (String arg : args) {
-            if (!arg.isBlank()) {
-                nodes.add(new SqlTemplateParser(arg).parse().nodes());
-            } else {
-                nodes.add(List.of());
-            }
-        }
-        return new FnNode(functionName, nodes);
     }
 
     private TemplateNode parseParam() {

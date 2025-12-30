@@ -8,13 +8,27 @@ import java.util.List;
 import java.util.Objects;
 
 public final class LimitOffsetDialect implements Dialect {
+    private final String id;
     private final String quote;
 
     public LimitOffsetDialect(String quote) {
+        this("limit-offset", quote);
+    }
+
+    public LimitOffsetDialect(String id, String quote) {
+        this.id = Objects.requireNonNull(id, "id");
         this.quote = Objects.requireNonNull(quote, "quote");
-        if (quote.isBlank()) {
+        if (this.id.isBlank()) {
+            throw new IllegalArgumentException("id must not be blank");
+        }
+        if (this.quote.isBlank()) {
             throw new IllegalArgumentException("quote must not be blank");
         }
+    }
+
+    @Override
+    public String id() {
+        return id;
     }
 
     @Override

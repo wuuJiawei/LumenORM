@@ -63,7 +63,9 @@ public final class Dsl {
         return new Expr.RawSql(sql);
     }
 
-    public static Functions functions() {
-        return new Functions();
+    public static Expr function(String name, Expr... args) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(args, "args");
+        return new Expr.Func(name, List.of(args));
     }
 }
