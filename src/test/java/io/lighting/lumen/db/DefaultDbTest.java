@@ -35,7 +35,7 @@ class DefaultDbTest {
     @Test
     void fetchRendersQueryAndExecutes() throws SQLException {
         AtomicReference<String> sqlCapture = new AtomicReference<>();
-        ResultSetHandler resultSetHandler = new ResultSetHandler(List.of(new Object[] { 7 }));
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of(new Object[] { 7 }));
         PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 0);
         ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), sqlCapture);
         DefaultDb db = createDb(connectionHandler.proxy());
@@ -60,7 +60,7 @@ class DefaultDbTest {
     @Test
     void runParsesTemplateAndExecutes() throws SQLException {
         AtomicReference<String> sqlCapture = new AtomicReference<>();
-        ResultSetHandler resultSetHandler = new ResultSetHandler(List.of(new Object[] { "ok" }));
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of(new Object[] { "ok" }));
         PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 0);
         ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), sqlCapture);
         DefaultDb db = createDb(connectionHandler.proxy());
@@ -75,7 +75,7 @@ class DefaultDbTest {
     @Test
     void executeUsesCommand() throws SQLException {
         AtomicReference<String> sqlCapture = new AtomicReference<>();
-        ResultSetHandler resultSetHandler = new ResultSetHandler(List.of());
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of());
         PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 2);
         ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), sqlCapture);
         DefaultDb db = createDb(connectionHandler.proxy());
@@ -139,7 +139,9 @@ class DefaultDbTest {
                     int columnIndex = (int) args[0];
                     return rows.get(index)[columnIndex - 1];
                 }
-                case "close" -> null;
+                case "close" -> {
+                    return null;
+                }
                 default -> throw new UnsupportedOperationException(method.getName());
             }
         }
