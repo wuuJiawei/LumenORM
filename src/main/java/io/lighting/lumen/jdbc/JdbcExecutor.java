@@ -55,6 +55,29 @@ public final class JdbcExecutor {
         }
     }
 
+    public <T> T executeAndReturnGeneratedKey(
+        RenderedSql renderedSql,
+        String columnLabel,
+        GeneratedKeyMapper<T> mapper
+    ) throws SQLException {
+        Objects.requireNonNull(renderedSql, "renderedSql");
+        Objects.requireNonNull(columnLabel, "columnLabel");
+        Objects.requireNonNull(mapper, "mapper");
+        Connection conn = acquireConnection();
+        try (PreparedStatement statement = conn.prepareStatement(renderedSql.sql(), new String[] { columnLabel })) {
+            bind(statement, renderedSql.binds());
+            statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new IllegalStateException("No generated keys returned");
+                }
+                return mapper.map(keys);
+            }
+        } finally {
+            releaseConnection(conn);
+        }
+    }
+
     public <T> ResultStream<T> fetchStream(RenderedSql renderedSql, RowMapper<T> mapper, int fetchSize)
         throws SQLException {
         Objects.requireNonNull(renderedSql, "renderedSql");

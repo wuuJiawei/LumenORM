@@ -1,6 +1,7 @@
 package io.lighting.lumen.db;
 
 import io.lighting.lumen.jdbc.JdbcExecutor;
+import io.lighting.lumen.jdbc.GeneratedKeyMapper;
 import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.jdbc.ResultStream;
 import io.lighting.lumen.meta.EntityMetaRegistry;
@@ -98,6 +99,26 @@ public final class DefaultDb implements Db {
             return stream;
         } catch (SQLException ex) {
             notifyExecuteError(DbOperation.QUERY, query, rendered, start, ex);
+            throw ex;
+        }
+    }
+
+    @Override
+    public <T> T executeAndReturnGeneratedKey(
+        Command command,
+        String columnLabel,
+        GeneratedKeyMapper<T> mapper
+    ) throws SQLException {
+        Objects.requireNonNull(command, "command");
+        RenderedSql rendered = renderWithObservers(DbOperation.COMMAND, command, () -> command.render(renderer));
+        notifyBeforeExecute(DbOperation.COMMAND, command, rendered);
+        long start = System.nanoTime();
+        try {
+            T key = executor.executeAndReturnGeneratedKey(rendered, columnLabel, mapper);
+            notifyAfterExecute(DbOperation.COMMAND, command, rendered, start, 1);
+            return key;
+        } catch (SQLException ex) {
+            notifyExecuteError(DbOperation.COMMAND, command, rendered, start, ex);
             throw ex;
         }
     }
