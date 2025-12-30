@@ -114,7 +114,7 @@ final class SqlTemplateRenderer {
             items.add(item);
         }
         if (items.isEmpty()) {
-            sql.append("(NULL)");
+            handleEmptyIn(context, sql);
             return;
         }
         sql.append('(');
@@ -133,6 +133,57 @@ final class SqlTemplateRenderer {
             }
         }
         sql.append(')');
+    }
+
+    private void handleEmptyIn(TemplateContext context, StringBuilder sql) {
+        switch (context.emptyInStrategy()) {
+            case NULL -> sql.append("(NULL)");
+            case ERROR -> throw new IllegalArgumentException("IN list is empty");
+            case FALSE -> replaceWithFalsePredicate(sql);
+        }
+    }
+
+    private void replaceWithFalsePredicate(StringBuilder sql) {
+        int start = findPredicateStart(sql);
+        if (start < 0) {
+            throw new IllegalArgumentException("Cannot apply empty-IN strategy FALSE outside predicate context");
+        }
+        sql.setLength(start);
+        appendSql(sql, "1=0");
+    }
+
+    private int findPredicateStart(StringBuilder sql) {
+        int index = sql.length() - 1;
+        while (index >= 0 && Character.isWhitespace(sql.charAt(index))) {
+            index--;
+        }
+        while (index >= 0) {
+            char ch = sql.charAt(index);
+            if (ch == '(') {
+                return index + 1;
+            }
+            if (Character.isLetterOrDigit(ch) || ch == '_') {
+                int end = index;
+                while (index >= 0) {
+                    char tokenChar = sql.charAt(index);
+                    if (!Character.isLetterOrDigit(tokenChar) && tokenChar != '_') {
+                        break;
+                    }
+                    index--;
+                }
+                String token = sql.substring(index + 1, end + 1).toUpperCase();
+                if ("WHERE".equals(token) || "AND".equals(token) || "OR".equals(token)) {
+                    int start = end + 1;
+                    while (start < sql.length() && Character.isWhitespace(sql.charAt(start))) {
+                        start++;
+                    }
+                    return start;
+                }
+            } else {
+                index--;
+            }
+        }
+        return -1;
     }
 
     private void appendPage(PageNode pageNode, TemplateContext context, StringBuilder sql, List<Bind> binds) {

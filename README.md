@@ -263,7 +263,7 @@ public final class LimitOffsetDialect implements Dialect {
 * `@where { ... }`：自动处理空块与 `AND/OR` 前缀
 * `@having { ... }`
 * `@or { ... }`：插入一个 OR 子片段（常用于循环组合）
-* `@in(:param)`：安全展开 IN 列表（空集合策略可配置）
+* `@in(:param)`：安全展开 IN 列表（空集合策略可配置：`NULL`/`FALSE`/`ERROR`）
 * `@table(Entity)`：输出表名（来自元模型）
 * `@col(Entity::field)`：输出列名（来自元模型）
 * `@orderBy(:sort, allowed={...}, default=...)`：排序白名单
@@ -274,6 +274,7 @@ public final class LimitOffsetDialect implements Dialect {
 * 模板中任何 `:name` 视为 **值参数**，必须绑定为 `?` 并进入 binds。
 * 表名/列名/排序片段只能来自 `@table/@col/@orderBy.allowed`，禁止 `:param` 直接出现在标识符位置。
 * `RawSql` 需显式启用，并要求审计 hook（默认禁用）。
+* `@in` 空集合策略通过 `EmptyInStrategy` 配置（默认 `NULL`，可改为 `FALSE`/`ERROR`）。
 
 ### 7.3 系统内置变量（条件编译）
 

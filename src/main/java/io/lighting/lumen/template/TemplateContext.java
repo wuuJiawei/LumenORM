@@ -21,6 +21,7 @@ public final class TemplateContext {
     private final EntityMetaRegistry metaRegistry;
     private final IdentifierMacros macros;
     private final EntityNameResolver entityNameResolver;
+    private final EmptyInStrategy emptyInStrategy;
     private final Deque<Map.Entry<String, Object>> locals;
 
     public TemplateContext(
@@ -29,7 +30,17 @@ public final class TemplateContext {
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver
     ) {
-        this(values, dialect, metaRegistry, entityNameResolver, new ArrayDeque<>());
+        this(values, dialect, metaRegistry, entityNameResolver, EmptyInStrategy.NULL, new ArrayDeque<>());
+    }
+
+    public TemplateContext(
+        Map<String, Object> values,
+        Dialect dialect,
+        EntityMetaRegistry metaRegistry,
+        EntityNameResolver entityNameResolver,
+        EmptyInStrategy emptyInStrategy
+    ) {
+        this(values, dialect, metaRegistry, entityNameResolver, emptyInStrategy, new ArrayDeque<>());
     }
 
     private TemplateContext(
@@ -37,6 +48,7 @@ public final class TemplateContext {
         Dialect dialect,
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver,
+        EmptyInStrategy emptyInStrategy,
         Deque<Map.Entry<String, Object>> locals
     ) {
         this.dialect = Objects.requireNonNull(dialect, "dialect");
@@ -44,6 +56,7 @@ public final class TemplateContext {
         this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
         this.macros = new IdentifierMacros(this.metaRegistry);
         this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+        this.emptyInStrategy = Objects.requireNonNull(emptyInStrategy, "emptyInStrategy");
         this.locals = locals;
     }
 
@@ -51,7 +64,7 @@ public final class TemplateContext {
         Objects.requireNonNull(name, "name");
         Deque<Map.Entry<String, Object>> next = new ArrayDeque<>(locals);
         next.push(Map.entry(name, value));
-        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, next);
+        return new TemplateContext(values, dialect, metaRegistry, entityNameResolver, emptyInStrategy, next);
     }
 
     public Dialect dialect() {
@@ -64,6 +77,10 @@ public final class TemplateContext {
 
     public Class<?> resolveEntity(String name) {
         return entityNameResolver.resolve(name);
+    }
+
+    public EmptyInStrategy emptyInStrategy() {
+        return emptyInStrategy;
     }
 
     static String systemBindingKey(String name) {

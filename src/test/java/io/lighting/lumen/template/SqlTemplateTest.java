@@ -87,6 +87,29 @@ class SqlTemplateTest {
     }
 
     @Test
+    void rendersEmptyInAsFalsePredicate() {
+        String template = "SELECT * FROM t WHERE id IN @in(:ids)";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+        RenderedSql rendered = sqlTemplate.render(
+            context(Bindings.of("ids", List.of()), EmptyInStrategy.FALSE)
+        );
+
+        assertEquals("SELECT * FROM t WHERE 1=0", rendered.sql());
+        assertEquals(List.of(), rendered.binds());
+    }
+
+    @Test
+    void rejectsEmptyInWhenConfiguredToError() {
+        String template = "SELECT * FROM t WHERE id IN @in(:ids)";
+        SqlTemplate sqlTemplate = SqlTemplate.parse(template);
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> sqlTemplate.render(context(Bindings.of("ids", List.of()), EmptyInStrategy.ERROR))
+        );
+    }
+
+    @Test
     void supportsComparisonExpressions() {
         String template = "SELECT * FROM t @where { @if(:count > 0 && :name != '') { AND name = :name } }";
         SqlTemplate sqlTemplate = SqlTemplate.parse(template);
@@ -164,11 +187,16 @@ class SqlTemplateTest {
     }
 
     private TemplateContext context(Bindings bindings) {
+        return context(bindings, EmptyInStrategy.NULL);
+    }
+
+    private TemplateContext context(Bindings bindings, EmptyInStrategy emptyInStrategy) {
         return new TemplateContext(
             bindings.asMap(),
             dialect,
             registry,
-            EntityNameResolvers.from(Map.of("Order", OrderEntity.class))
+            EntityNameResolvers.from(Map.of("Order", OrderEntity.class)),
+            emptyInStrategy
         );
     }
 
