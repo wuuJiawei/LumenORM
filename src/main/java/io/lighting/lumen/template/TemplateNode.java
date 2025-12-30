@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 sealed interface TemplateNode permits TextNode, ParamNode, IfNode, ForNode, ClauseNode,
-    OrNode, InNode, TableNode, ColumnNode, PageNode, FnNode {
+    OrNode, InNode, TableNode, ColumnNode, PageNode, FnNode, OrderByNode {
 }
 
 record TextNode(String text) implements TemplateNode {
@@ -77,5 +77,16 @@ record FnNode(String name, List<List<TemplateNode>> args) implements TemplateNod
     FnNode {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(args, "args");
+    }
+}
+
+record OrderByNode(
+    TemplateExpression selection,
+    java.util.Map<String, List<TemplateNode>> allowed,
+    String defaultKey
+) implements TemplateNode {
+    OrderByNode {
+        Objects.requireNonNull(selection, "selection");
+        Objects.requireNonNull(allowed, "allowed");
     }
 }

@@ -67,6 +67,7 @@ final class SqlTemplateParser {
             case "col" -> parseColumn();
             case "page" -> parsePage();
             case "fn" -> parseFn();
+            case "orderBy" -> parseOrderBy();
             default -> throw new IllegalArgumentException("Unknown directive @" + name);
         };
     }
@@ -135,6 +136,83 @@ final class SqlTemplateParser {
         String page = contents.substring(0, comma).trim();
         String pageSize = contents.substring(comma + 1).trim();
         return new PageNode(parseExpression(page), parseExpression(pageSize));
+    }
+
+    private TemplateNode parseOrderBy() {
+        String contents = parseParenContents();
+        List<String> parts = splitTopLevel(contents, ',');
+        if (parts.isEmpty()) {
+            throw new IllegalArgumentException("@orderBy requires parameters");
+        }
+        TemplateExpression selection = parseExpression(parts.get(0));
+        java.util.Map<String, List<TemplateNode>> allowed = null;
+        String defaultKey = null;
+        for (int i = 1; i < parts.size(); i++) {
+            String part = parts.get(i).trim();
+            if (part.isEmpty()) {
+                continue;
+            }
+            int eqIndex = findTopLevelChar(part, '=');
+            if (eqIndex < 0) {
+                throw new IllegalArgumentException("@orderBy option must be key = value: " + part);
+            }
+            String key = part.substring(0, eqIndex).trim();
+            String value = part.substring(eqIndex + 1).trim();
+            if (key.equals("allowed")) {
+                allowed = parseAllowedOrders(value);
+            } else if (key.equals("default")) {
+                defaultKey = parseOrderKey(value);
+            } else {
+                throw new IllegalArgumentException("Unknown @orderBy option: " + key);
+            }
+        }
+        if (allowed == null || allowed.isEmpty()) {
+            throw new IllegalArgumentException("@orderBy requires allowed mappings");
+        }
+        if (defaultKey != null && !allowed.containsKey(defaultKey)) {
+            throw new IllegalArgumentException("@orderBy default key not in allowed: " + defaultKey);
+        }
+        return new OrderByNode(selection, allowed, defaultKey);
+    }
+
+    private java.util.Map<String, List<TemplateNode>> parseAllowedOrders(String value) {
+        String trimmed = value.trim();
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            throw new IllegalArgumentException("@orderBy allowed must be enclosed in { }");
+        }
+        String body = trimmed.substring(1, trimmed.length() - 1).trim();
+        List<String> entries = splitTopLevel(body, ',');
+        java.util.Map<String, List<TemplateNode>> allowed = new java.util.LinkedHashMap<>();
+        for (String entry : entries) {
+            if (entry.isBlank()) {
+                continue;
+            }
+            int colonIndex = findTopLevelChar(entry, ':');
+            if (colonIndex < 0) {
+                throw new IllegalArgumentException("@orderBy allowed entry must be key : value: " + entry);
+            }
+            String key = entry.substring(0, colonIndex).trim();
+            String fragment = entry.substring(colonIndex + 1).trim();
+            if (key.isEmpty() || fragment.isEmpty()) {
+                throw new IllegalArgumentException("@orderBy allowed entry must be key : value: " + entry);
+            }
+            if (allowed.put(key, new SqlTemplateParser(fragment).parse().nodes()) != null) {
+                throw new IllegalArgumentException("@orderBy duplicate allowed key: " + key);
+            }
+        }
+        return allowed;
+    }
+
+    private String parseOrderKey(String value) {
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("@orderBy default must not be empty");
+        }
+        if ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
+            || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private TemplateNode parseFn() {
@@ -206,12 +284,13 @@ final class SqlTemplateParser {
         return new TemplateExpressionParser(expr).parse();
     }
 
-    private List<String> splitArgs(String input) {
+    private List<String> splitTopLevel(String input, char delimiter) {
         List<String> parts = new ArrayList<>();
         if (input.isBlank()) {
             return parts;
         }
-        int depth = 0;
+        int parenDepth = 0;
+        int braceDepth = 0;
         boolean inSingle = false;
         boolean inDouble = false;
         StringBuilder current = new StringBuilder();
@@ -237,10 +316,14 @@ final class SqlTemplateParser {
             }
             if (!inSingle && !inDouble) {
                 if (ch == '(') {
-                    depth++;
+                    parenDepth++;
                 } else if (ch == ')') {
-                    depth = Math.max(0, depth - 1);
-                } else if (ch == ',' && depth == 0) {
+                    parenDepth = Math.max(0, parenDepth - 1);
+                } else if (ch == '{') {
+                    braceDepth++;
+                } else if (ch == '}') {
+                    braceDepth = Math.max(0, braceDepth - 1);
+                } else if (ch == delimiter && parenDepth == 0 && braceDepth == 0) {
                     parts.add(current.toString().trim());
                     current.setLength(0);
                     continue;
@@ -252,6 +335,51 @@ final class SqlTemplateParser {
             parts.add(current.toString().trim());
         }
         return parts;
+    }
+
+    private int findTopLevelChar(String input, char target) {
+        int parenDepth = 0;
+        int braceDepth = 0;
+        boolean inSingle = false;
+        boolean inDouble = false;
+        for (int i = 0; i < input.length(); i++) {
+            char ch = input.charAt(i);
+            if (ch == '\\') {
+                i++;
+                continue;
+            }
+            if (ch == '\'' && !inDouble) {
+                inSingle = !inSingle;
+                continue;
+            }
+            if (ch == '"' && !inSingle) {
+                inDouble = !inDouble;
+                continue;
+            }
+            if (inSingle || inDouble) {
+                continue;
+            }
+            if (ch == '(') {
+                parenDepth++;
+                continue;
+            }
+            if (ch == ')') {
+                parenDepth = Math.max(0, parenDepth - 1);
+                continue;
+            }
+            if (ch == '{') {
+                braceDepth++;
+                continue;
+            }
+            if (ch == '}') {
+                braceDepth = Math.max(0, braceDepth - 1);
+                continue;
+            }
+            if (ch == target && parenDepth == 0 && braceDepth == 0) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private int findTopLevelComma(String input) {
