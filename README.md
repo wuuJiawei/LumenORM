@@ -393,6 +393,21 @@ public interface Db {
 2. `Record/DTO` 反射映射（开发效率高）；
 3. APT 生成映射（高性能、强校验）。
 
+### 10.3 写入与批量执行（规划）
+
+补齐增删改与大数据量批处理能力，建议拆成以下路线：
+
+1. **DML AST + Renderer**：新增 `InsertStmt/UpdateStmt/DeleteStmt`，统一绑定模型与渲染规则。
+2. **写入 DSL**：`insertInto(table).values(...)`、`update(table).set(...).where(...)`、`deleteFrom(table).where(...)`。
+3. **批量执行 API**：在 `Db` 上提供 `executeBatch(...)` 或 `BatchCommand`，支持：
+   * `PreparedStatement.addBatch()` + 批量大小控制；
+   * 多行 `INSERT INTO ... VALUES (...), (...), ...`（按 Dialect 能力选择）。
+4. **大数据量优化**：
+   * 读：`fetchStream` / `Iterator` 风格执行，允许 `fetchSize` 与游标；
+   * 写：按批次切分（如 500/1000 行），提供可配置的批量大小与事务边界；
+   * 可选：Dialect 专属批量通道（如 PostgreSQL `COPY`、MySQL `LOAD DATA`）。
+5. **增强语义**（后续）：返回自增主键、乐观锁 `version` 支持、`upsert`（按 Dialect 定义）。
+
 ---
 
 ## 11. 编译期检查与生成（APT）
@@ -677,9 +692,10 @@ db.run("""
 1. AST + Renderer + JDBC Executor（含 binds）
 2. EntityMeta 反射缓存 + `@table/@col` 宏
 3. DSL：select/from/join/where/order/page
-4. 模板：@if/@for/@where/@in/@orderBy/@page
-5. APT：`@SqlTemplate` 编译期校验与实现生成
-6. 可观测性与安全门禁（排序白名单、危险 RawSql 默认禁用）
+4. DML：insert/update/delete + 批量执行策略
+5. 模板：@if/@for/@where/@in/@orderBy/@page
+6. APT：`@SqlTemplate` 编译期校验与实现生成
+7. 可观测性与安全门禁（排序白名单、危险 RawSql 默认禁用）
 
 ---
 
