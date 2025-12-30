@@ -41,6 +41,21 @@ public final class Dsl {
         return new SelectBuilder(items);
     }
 
+    public InsertBuilder insertInto(Table table) {
+        Objects.requireNonNull(table, "table");
+        return new InsertBuilder(table.ref());
+    }
+
+    public UpdateBuilder update(Table table) {
+        Objects.requireNonNull(table, "table");
+        return new UpdateBuilder(table.ref());
+    }
+
+    public DeleteBuilder deleteFrom(Table table) {
+        Objects.requireNonNull(table, "table");
+        return new DeleteBuilder(table.ref());
+    }
+
     public static SelectItem item(Expr expr) {
         Objects.requireNonNull(expr, "expr");
         return new SelectItem(expr, null);

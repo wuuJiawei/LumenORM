@@ -367,6 +367,24 @@ Query q = dsl.select(
     .page(f.page(), f.pageSize());
 ```
 
+### 8.3 DML DSL（insert/update/delete）
+
+```java
+InsertStmt insert = dsl.insertInto(o)
+    .columns(o.col("id"), o.col("status"))
+    .row(param("id"), "NEW")
+    .build();
+
+UpdateStmt update = dsl.update(o)
+    .set(o.col("status"), param("status"))
+    .where(o.col("id").eq(param("id")))
+    .build();
+
+DeleteStmt delete = dsl.deleteFrom(o)
+    .where(o.col("id").eq(param("id")))
+    .build();
+```
+
 ---
 
 ## 9. 函数使用（直接 SQL + Dialect Hook）
