@@ -417,6 +417,18 @@ public interface Db {
 * `beforeExecute/afterExecute`：可记录执行耗时、影响行数/返回行数；
 * `onRenderError/onExecuteError`：用于埋点错误与失败场景。
 
+### 10.5 事务辅助（回调式）
+
+提供 `TransactionManager`，在回调中复用同一连接：
+
+```java
+TransactionManager tx = new TransactionManager(dataSource, renderer, dialect, metaRegistry, nameResolver);
+tx.inTransaction(db -> {
+  db.execute(Command.of(renderedSql));
+  return null;
+});
+```
+
 ---
 
 ## 11. 编译期检查与生成（APT）

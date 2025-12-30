@@ -14,16 +14,23 @@ import javax.sql.DataSource;
 
 public final class JdbcExecutor {
     private final DataSource dataSource;
+    private final Connection connection;
 
     public JdbcExecutor(DataSource dataSource) {
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
+        this.connection = null;
+    }
+
+    public JdbcExecutor(Connection connection) {
+        this.connection = Objects.requireNonNull(connection, "connection");
+        this.dataSource = null;
     }
 
     public <T> List<T> fetch(RenderedSql renderedSql, RowMapper<T> mapper) throws SQLException {
         Objects.requireNonNull(renderedSql, "renderedSql");
         Objects.requireNonNull(mapper, "mapper");
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement statement = connection.prepareStatement(renderedSql.sql())) {
+        Connection conn = acquireConnection();
+        try (PreparedStatement statement = conn.prepareStatement(renderedSql.sql())) {
             bind(statement, renderedSql.binds());
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<T> results = new ArrayList<>();
@@ -32,15 +39,32 @@ public final class JdbcExecutor {
                 }
                 return results;
             }
+        } finally {
+            releaseConnection(conn);
         }
     }
 
     public int execute(RenderedSql renderedSql) throws SQLException {
         Objects.requireNonNull(renderedSql, "renderedSql");
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement statement = connection.prepareStatement(renderedSql.sql())) {
+        Connection conn = acquireConnection();
+        try (PreparedStatement statement = conn.prepareStatement(renderedSql.sql())) {
             bind(statement, renderedSql.binds());
             return statement.executeUpdate();
+        } finally {
+            releaseConnection(conn);
+        }
+    }
+
+    private Connection acquireConnection() throws SQLException {
+        if (connection != null) {
+            return connection;
+        }
+        return dataSource.getConnection();
+    }
+
+    private void releaseConnection(Connection conn) throws SQLException {
+        if (connection == null && conn != null) {
+            conn.close();
         }
     }
 
