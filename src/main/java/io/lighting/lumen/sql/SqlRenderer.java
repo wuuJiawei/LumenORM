@@ -1,6 +1,7 @@
 package io.lighting.lumen.sql;
 
 import io.lighting.lumen.sql.ast.Expr;
+import io.lighting.lumen.sql.ast.InsertStmt;
 import io.lighting.lumen.sql.ast.Join;
 import io.lighting.lumen.sql.ast.JoinType;
 import io.lighting.lumen.sql.ast.OrderItem;
@@ -9,6 +10,9 @@ import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.Stmt;
 import io.lighting.lumen.sql.ast.TableRef;
+import io.lighting.lumen.sql.ast.UpdateItem;
+import io.lighting.lumen.sql.ast.UpdateStmt;
+import io.lighting.lumen.sql.ast.DeleteStmt;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +31,12 @@ public final class SqlRenderer {
         List<Bind> binds = new ArrayList<>();
         if (stmt instanceof SelectStmt selectStmt) {
             renderSelect(selectStmt, bindings, sql, binds);
+        } else if (stmt instanceof InsertStmt insertStmt) {
+            renderInsert(insertStmt, bindings, sql, binds);
+        } else if (stmt instanceof UpdateStmt updateStmt) {
+            renderUpdate(updateStmt, bindings, sql, binds);
+        } else if (stmt instanceof DeleteStmt deleteStmt) {
+            renderDelete(deleteStmt, bindings, sql, binds);
         } else {
             throw new IllegalArgumentException("Unsupported statement: " + stmt.getClass().getSimpleName());
         }
@@ -92,12 +102,70 @@ public final class SqlRenderer {
         }
     }
 
+    private void renderInsert(InsertStmt stmt, Bindings bindings, StringBuilder sql, List<Bind> binds) {
+        sql.append("INSERT INTO ");
+        renderTableRef(stmt.table(), sql);
+        sql.append(" (");
+        for (int i = 0; i < stmt.columns().size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            appendIdent(stmt.columns().get(i), sql);
+        }
+        sql.append(") VALUES ");
+        for (int rowIndex = 0; rowIndex < stmt.rows().size(); rowIndex++) {
+            if (rowIndex > 0) {
+                sql.append(", ");
+            }
+            sql.append('(');
+            List<Expr> row = stmt.rows().get(rowIndex);
+            for (int colIndex = 0; colIndex < row.size(); colIndex++) {
+                if (colIndex > 0) {
+                    sql.append(", ");
+                }
+                renderExpr(row.get(colIndex), bindings, sql, binds);
+            }
+            sql.append(')');
+        }
+    }
+
+    private void renderUpdate(UpdateStmt stmt, Bindings bindings, StringBuilder sql, List<Bind> binds) {
+        sql.append("UPDATE ");
+        renderTableRef(stmt.table(), sql);
+        sql.append(" SET ");
+        for (int i = 0; i < stmt.assignments().size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            renderUpdateItem(stmt.assignments().get(i), bindings, sql, binds);
+        }
+        if (stmt.where() != null) {
+            sql.append(" WHERE ");
+            renderExpr(stmt.where(), bindings, sql, binds);
+        }
+    }
+
+    private void renderDelete(DeleteStmt stmt, Bindings bindings, StringBuilder sql, List<Bind> binds) {
+        sql.append("DELETE FROM ");
+        renderTableRef(stmt.table(), sql);
+        if (stmt.where() != null) {
+            sql.append(" WHERE ");
+            renderExpr(stmt.where(), bindings, sql, binds);
+        }
+    }
+
     private void renderSelectItem(SelectItem item, Bindings bindings, StringBuilder sql, List<Bind> binds) {
         renderExpr(item.expr(), bindings, sql, binds);
         if (item.alias() != null && !item.alias().isBlank()) {
             sql.append(" AS ");
             appendIdent(item.alias(), sql);
         }
+    }
+
+    private void renderUpdateItem(UpdateItem item, Bindings bindings, StringBuilder sql, List<Bind> binds) {
+        renderExpr(item.column(), bindings, sql, binds);
+        sql.append(" = ");
+        renderExpr(item.value(), bindings, sql, binds);
     }
 
     private void renderOrderItem(OrderItem item, Bindings bindings, StringBuilder sql, List<Bind> binds) {

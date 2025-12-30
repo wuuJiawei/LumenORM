@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.lighting.lumen.sql.ast.Expr;
+import io.lighting.lumen.sql.ast.InsertStmt;
 import io.lighting.lumen.sql.ast.Join;
 import io.lighting.lumen.sql.ast.JoinType;
 import io.lighting.lumen.sql.ast.OrderItem;
@@ -12,6 +13,9 @@ import io.lighting.lumen.sql.ast.Paging;
 import io.lighting.lumen.sql.ast.SelectItem;
 import io.lighting.lumen.sql.ast.SelectStmt;
 import io.lighting.lumen.sql.ast.TableRef;
+import io.lighting.lumen.sql.ast.UpdateItem;
+import io.lighting.lumen.sql.ast.UpdateStmt;
+import io.lighting.lumen.sql.ast.DeleteStmt;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -235,6 +239,71 @@ class SqlRendererTest {
         assertEquals("SELECT 1 FROM \"orders\" \"o\" WHERE \"o\".\"deleted_at\" = ?", rendered.sql());
         assertEquals(1, rendered.binds().size());
         assertInstanceOf(Bind.NullValue.class, rendered.binds().get(0));
+    }
+
+    @Test
+    void rendersInsertStatements(TestReporter reporter) {
+        SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
+        InsertStmt stmt = new InsertStmt(
+            new TableRef("orders", null),
+            List.of("id", "status"),
+            List.of(List.of(new Expr.Param("id"), new Expr.Literal("NEW")))
+        );
+
+        RenderedSql rendered = renderer.render(stmt, Bindings.of("id", 10));
+        reporter.publishEntry("sql", rendered.sql());
+
+        assertEquals(
+            "INSERT INTO \"orders\" (\"id\", \"status\") VALUES (?, ?)",
+            rendered.sql()
+        );
+        assertEquals(
+            List.of(new Bind.Value(10, 0), new Bind.Value("NEW", 0)),
+            rendered.binds()
+        );
+    }
+
+    @Test
+    void rendersUpdateStatements(TestReporter reporter) {
+        SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
+        UpdateStmt stmt = new UpdateStmt(
+            new TableRef("orders", null),
+            List.of(new UpdateItem(new Expr.Column(null, "status"), new Expr.Param("status"))),
+            new Expr.Compare(new Expr.Column(null, "id"), Expr.Op.EQ, new Expr.Param("id"))
+        );
+
+        RenderedSql rendered = renderer.render(stmt, Bindings.of("status", "PAID", "id", 7));
+        reporter.publishEntry("sql", rendered.sql());
+
+        assertEquals(
+            "UPDATE \"orders\" SET \"status\" = ? WHERE \"id\" = ?",
+            rendered.sql()
+        );
+        assertEquals(
+            List.of(new Bind.Value("PAID", 0), new Bind.Value(7, 0)),
+            rendered.binds()
+        );
+    }
+
+    @Test
+    void rendersDeleteStatements(TestReporter reporter) {
+        SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
+        DeleteStmt stmt = new DeleteStmt(
+            new TableRef("orders", null),
+            new Expr.Compare(new Expr.Column(null, "id"), Expr.Op.EQ, new Expr.Param("id"))
+        );
+
+        RenderedSql rendered = renderer.render(stmt, Bindings.of("id", 5));
+        reporter.publishEntry("sql", rendered.sql());
+
+        assertEquals(
+            "DELETE FROM \"orders\" WHERE \"id\" = ?",
+            rendered.sql()
+        );
+        assertEquals(
+            List.of(new Bind.Value(5, 0)),
+            rendered.binds()
+        );
     }
 
     @Test

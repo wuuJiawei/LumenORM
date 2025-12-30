@@ -109,7 +109,7 @@ public sealed interface Bind permits Bind.Value, Bind.NullValue {
 
 ```java
 // Statement
-public sealed interface Stmt permits SelectStmt {}
+public sealed interface Stmt permits SelectStmt, InsertStmt, UpdateStmt, DeleteStmt {}
 
 public record SelectStmt(
     List<SelectItem> select,
@@ -120,6 +120,25 @@ public record SelectStmt(
     Expr having,
     List<OrderItem> orderBy,
     Paging paging
+) implements Stmt {}
+
+public record InsertStmt(
+    TableRef table,
+    List<String> columns,
+    List<List<Expr>> rows
+) implements Stmt {}
+
+public record UpdateStmt(
+    TableRef table,
+    List<UpdateItem> assignments,
+    Expr where
+) implements Stmt {}
+
+public record UpdateItem(Expr.Column column, Expr value) {}
+
+public record DeleteStmt(
+    TableRef table,
+    Expr where
 ) implements Stmt {}
 
 // Table & Join
