@@ -90,17 +90,68 @@ class DefaultDbTest {
         assertEquals(List.of(new BoundParam("lamp", 0, "setObject")), statementHandler.boundParams());
     }
 
+    @Test
+    void notifiesObserversAroundRun() throws SQLException {
+        List<String> events = new ArrayList<>();
+        DbObserver observer = new DbObserver() {
+            @Override
+            public void beforeRender(DbOperation operation, Object source) {
+                events.add("beforeRender:" + operation);
+            }
+
+            @Override
+            public void afterRender(DbOperation operation, Object source, RenderedSql rendered, long elapsedNanos) {
+                events.add("afterRender:" + operation);
+            }
+
+            @Override
+            public void beforeExecute(DbOperation operation, Object source, RenderedSql rendered) {
+                events.add("beforeExecute:" + operation);
+            }
+
+            @Override
+            public void afterExecute(
+                DbOperation operation,
+                Object source,
+                RenderedSql rendered,
+                long elapsedNanos,
+                int rowCount
+            ) {
+                events.add("afterExecute:" + operation + ":" + rowCount);
+            }
+        };
+        AtomicReference<String> sqlCapture = new AtomicReference<>();
+        ResultSetHandler resultSetHandler = new ResultSetHandler(List.<Object[]>of(new Object[] { "ok" }));
+        PreparedStatementHandler statementHandler = new PreparedStatementHandler(resultSetHandler.proxy(), 0);
+        ConnectionHandler connectionHandler = new ConnectionHandler(statementHandler.proxy(), sqlCapture);
+        DefaultDb db = createDb(connectionHandler.proxy(), observer);
+
+        List<Object> results = db.run("SELECT :id", Bindings.of("id", 3), rs -> rs.getObject(1));
+
+        assertEquals(List.of("ok"), results);
+        assertEquals(
+            List.of("beforeRender:TEMPLATE", "afterRender:TEMPLATE", "beforeExecute:TEMPLATE", "afterExecute:TEMPLATE:1"),
+            events
+        );
+    }
+
     private DefaultDb createDb(Connection connection) {
+        return createDb(connection, null);
+    }
+
+    private DefaultDb createDb(Connection connection, DbObserver observer) {
         DataSource dataSource = new DataSourceHandler(connection).proxy();
         JdbcExecutor executor = new JdbcExecutor(dataSource);
         LimitOffsetDialect dialect = new LimitOffsetDialect("\"");
         SqlRenderer renderer = new SqlRenderer(dialect);
+        List<DbObserver> observers = observer == null ? List.of() : List.of(observer);
         return new DefaultDb(
             executor,
             renderer,
             dialect,
             new ReflectionEntityMetaRegistry(),
-            EntityNameResolvers.from(Map.of())
+            EntityNameResolvers.from(Map.of()),
+            observers
         );
     }
 

@@ -409,6 +409,14 @@ public interface Db {
    * 可选：Dialect 专属批量通道（如 PostgreSQL `COPY`、MySQL `LOAD DATA`）。
 5. **增强语义**（后续）：返回自增主键、乐观锁 `version` 支持、`upsert`（按 Dialect 定义）。
 
+### 10.4 可观测性 Hook（渲染/执行）
+
+提供 `DbObserver` 监听渲染与执行阶段：
+
+* `beforeRender/afterRender`：可记录 SQL 渲染耗时；
+* `beforeExecute/afterExecute`：可记录执行耗时、影响行数/返回行数；
+* `onRenderError/onExecuteError`：用于埋点错误与失败场景。
+
 ---
 
 ## 11. 编译期检查与生成（APT）
