@@ -1,0 +1,78 @@
+LumenORM LLM guide
+
+Project summary
+- Java 21, Maven single module.
+- Base package: io.lighting.lumen.
+- Goal: SQL-first ORM with two entry paths: SQL templates and fluent DSL.
+
+Build and test
+- mvn test
+- mvn clean package
+- JUnit 5, JaCoCo 90% line coverage gate.
+
+Core SQL model and rendering
+- AST types in io.lighting.lumen.sql.ast (SelectStmt, InsertStmt, UpdateStmt, DeleteStmt, Expr, Join, OrderItem, Paging).
+- Bindings: io.lighting.lumen.sql.Bindings (name to value map).
+- RenderedSql: SQL string + ordered binds.
+- SqlRenderer renders AST using Dialect.
+- Dialect has id(), quoteIdent(), renderPagination(), renderFunction().
+
+DSL
+- io.lighting.lumen.dsl.Dsl is the entry.
+- Table maps entity class to table/columns using meta registry.
+- ColumnRef produces Expr, OrderItem, and predicates.
+- Builders: SelectBuilder, InsertBuilder, UpdateBuilder, DeleteBuilder.
+
+Template engine
+- SqlTemplate.parse(String) builds TemplateNode list.
+- SqlTemplateRenderer renders with TemplateContext.
+- Directives: @if, @for, @where, @having, @or, @in, @orderBy, @page, @table, @col.
+- Expressions support :param, boolean ops, comparisons, string/number literals.
+- System variable: ::dialect (stored as __dialect binding).
+- Safety: @orderBy uses whitelist, @in empty strategy, block :param in identifier positions.
+
+Entity meta model
+- Annotations: @Table, @Column, @Id.
+- ReflectionEntityMetaRegistry builds EntityMeta at runtime.
+- IdentifierMacros maps entity field names to column names.
+
+APT processors
+- SqlTemplateProcessor:
+  - Validates templates and bindings at compile time.
+  - Requires @SqlTemplate methods on interfaces.
+  - Requires throws SQLException.
+  - List return requires a RowMapper parameter.
+  - Generates *_SqlTemplates and *_Impl classes.
+- EntityMetaProcessor:
+  - Generates Q classes (QOrder) for @Table entities.
+  - Q class exposes ColumnRef.of(alias, "COLUMN").
+
+Execution API
+- JdbcExecutor: fetch, execute, executeBatch, fetchStream, executeAndReturnGeneratedKey.
+- Db interface and DefaultDb implementation:
+  - fetch(Query, RowMapper), execute(Command), run(sqlText, Bindings, RowMapper).
+  - executeOptimistic(Command) ensures exactly 1 row updated.
+  - executeBatch(BatchSql), fetchStream(Query, RowMapper, fetchSize).
+- Query/Command wrap AST or RenderedSql.
+- DbObserver hooks for render and execute.
+- TransactionManager for callback style transactions.
+
+Integration tests
+- H2IntegrationTest uses in-memory H2 with quoted identifiers.
+- DockerComposeIntegrationTest uses MySQL/Postgres/Oracle via docker compose.
+  - MySQL port: 3307
+  - Postgres port: 5432
+  - Oracle port: 1521
+  - Credentials are hard-coded in the test.
+
+Common usage patterns
+- Templates: db.run("SELECT ... @where { ... }", bindings, mapper).
+- DSL: dsl.table(Entity.class), dsl.select(...).from(...).where(...).build(), then renderer + db.fetch.
+
+Files of interest
+- src/main/java/io/lighting/lumen/sql/SqlRenderer.java
+- src/main/java/io/lighting/lumen/template/SqlTemplateParser.java
+- src/main/java/io/lighting/lumen/template/SqlTemplateRenderer.java
+- src/main/java/io/lighting/lumen/db/DefaultDb.java
+- src/main/java/io/lighting/lumen/apt/SqlTemplateProcessor.java
+- src/main/java/io/lighting/lumen/apt/EntityMetaProcessor.java

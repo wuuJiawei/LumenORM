@@ -61,7 +61,11 @@ final class SqlTemplateRenderer {
             RenderedSql inner = renderToSql(orNode.body(), context);
             String trimmed = inner.sql().trim();
             if (!trimmed.isBlank()) {
-                appendSql(sql, "OR " + trimmed);
+                if (shouldPrefixOr(sql)) {
+                    appendSql(sql, "OR " + trimmed);
+                } else {
+                    appendSql(sql, trimmed);
+                }
                 binds.addAll(inner.binds());
             }
         } else if (node instanceof InNode inNode) {
@@ -329,6 +333,20 @@ final class SqlTemplateRenderer {
             return;
         }
         sql.append(fragment.substring(start));
+    }
+
+    private boolean shouldPrefixOr(StringBuilder sql) {
+        TokenCursor cursor = new TokenCursor(sql);
+        char last = cursor.peekNonWhitespace();
+        if (last == '\0' || last == '(') {
+            return false;
+        }
+        Token token = cursor.readToken();
+        if (token == null) {
+            return false;
+        }
+        String upper = token.value.toUpperCase();
+        return !("AND".equals(upper) || "OR".equals(upper) || "WHERE".equals(upper));
     }
 
     private void ensureParamNotIdentifierPosition(StringBuilder sql) {
