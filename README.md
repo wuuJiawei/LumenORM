@@ -812,6 +812,24 @@ db.run("""
 
 ---
 
+## 18. Docker Compose 集成测试（MySQL/Postgres/Oracle）
+
+提供 `docker-compose.yml` 与初始化脚本，可运行真实数据库集成测试：
+
+```bash
+docker compose up -d
+```
+
+连接信息在测试类中写死，默认值如下：
+
+* MySQL: `jdbc:mysql://localhost:3307/lumen` / `root` / `root`
+* Postgres: `jdbc:postgresql://localhost:5432/lumen` / `lumen` / `lumen`
+* Oracle: `jdbc:oracle:thin:@localhost:1521/FREEPDB1` / `lumen` / `lumen`（主键列名 `ID`）
+
+如需变更，请直接修改 `src/test/java/io/lighting/lumen/integration/DockerComposeIntegrationTest.java`。
+
+---
+
 ## 附录 A：关键 API 草案（汇总）
 
 ```java

@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: lumen-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: lumen
+      MYSQL_USER: lumen
+      MYSQL_PASSWORD: lumen
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./docker/init/mysql:/docker-entrypoint-initdb.d
+
+  postgres:
+    image: postgres:16
+    container_name: lumen-postgres
+    environment:
+      POSTGRES_DB: lumen
+      POSTGRES_USER: lumen
+      POSTGRES_PASSWORD: lumen
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/init/postgres:/docker-entrypoint-initdb.d
+
+  oracle:
+    image: gvenzl/oracle-free:23.3-slim
+    container_name: lumen-oracle
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: lumen
+      APP_USER_PASSWORD: lumen
+    ports:
+      - "1521:1521"
+    volumes:
+      - ./docker/init/oracle:/container-entrypoint-initdb.d
