@@ -221,14 +221,20 @@ public final class QOrder {
 
   public QOrder as(String alias) { return new QOrder(this.table, alias); }
 
-  public ColumnRef id() { return new ColumnRef(alias, "id"); }
-  public ColumnRef orderNo() { return new ColumnRef(alias, "order_no"); }
-  public ColumnRef createdAt() { return new ColumnRef(alias, "created_at"); }
+  public ColumnRef id() { return ColumnRef.of(alias, "id"); }
+  public ColumnRef orderNo() { return ColumnRef.of(alias, "order_no"); }
+  public ColumnRef createdAt() { return ColumnRef.of(alias, "created_at"); }
   // ...
 }
 ```
 
 这样 DSL 端的列引用天然重构安全。
+
+当前实现约定：
+
+* 处理所有标注 `@Table` 的类型；
+* 仅输出标注 `@Column` 或 `@Id` 的字段；
+* 生成方法返回 `ColumnRef.of(alias, "column")`，可直接用于 DSL/AST。
 
 ---
 

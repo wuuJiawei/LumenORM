@@ -16,6 +16,10 @@ public final class ColumnRef {
         this.columnName = Objects.requireNonNull(columnName, "columnName");
     }
 
+    public static ColumnRef of(String tableAlias, String columnName) {
+        return new ColumnRef(tableAlias, columnName);
+    }
+
     public Expr.Column expr() {
         return new Expr.Column(tableAlias, columnName);
     }
