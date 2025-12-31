@@ -514,16 +514,40 @@ APT 对每个方法：
 
 ```java
 public final class OrderRepo_Impl implements OrderRepo {
+  private final Db db;
+  private final Dialect dialect;
+  private final EntityMetaRegistry metaRegistry;
+  private final EntityNameResolver entityNameResolver;
+
+  public OrderRepo_Impl(
+      Db db,
+      Dialect dialect,
+      EntityMetaRegistry metaRegistry,
+      EntityNameResolver entityNameResolver
+  ) { ... }
+
   @Override
-  public List<OrderRow> search(Filter filter, String kw, OrderSort sort, int page, int pageSize) {
-    // 直接构建 SQL AST 或渲染输出（避免运行时解析模板）
-    SelectStmt stmt = ...;
+  public List<OrderRow> search(
+      Filter filter,
+      String kw,
+      OrderSort sort,
+      int page,
+      int pageSize,
+      RowMapper<OrderRow> mapper
+  ) throws SQLException {
+    // 生成绑定并渲染模板，交给 Db 执行
     Bindings bindings = ...;
-    RenderedSql rs = renderer.render(stmt, bindings);
-    return executor.fetch(rs, OrderRow.class);
+    RenderedSql rs = ...;
+    return db.fetch(Query.of(rs), mapper);
   }
 }
 ```
+
+约束约定：
+
+* `@SqlTemplate` 方法必须声明 `throws SQLException`（执行层需要）；
+* `List<T>` 返回值的方法必须包含 `RowMapper<T>` 参数；
+* 模板绑定名来自方法参数名（忽略 `RowMapper`）。
 
 ### 11.2 `.run("""...""")` 的编译期增强方案
 

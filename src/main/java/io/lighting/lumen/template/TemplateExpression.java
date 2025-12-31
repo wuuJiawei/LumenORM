@@ -71,6 +71,10 @@ final class PathExpression implements TemplateExpression {
     public Object evaluate(TemplateContext context) {
         return context.resolvePath(segments);
     }
+
+    List<PathSegment> segments() {
+        return segments;
+    }
 }
 
 final class UnaryExpression implements TemplateExpression {
@@ -83,6 +87,10 @@ final class UnaryExpression implements TemplateExpression {
     @Override
     public Object evaluate(TemplateContext context) {
         return !TemplateExpression.toBoolean(expression.evaluate(context));
+    }
+
+    TemplateExpression expression() {
+        return expression;
     }
 }
 
@@ -122,6 +130,14 @@ final class BinaryExpression implements TemplateExpression {
             case GT -> TemplateExpression.compareValues(left.evaluate(context), right.evaluate(context)) > 0;
             case GE -> TemplateExpression.compareValues(left.evaluate(context), right.evaluate(context)) >= 0;
         };
+    }
+
+    TemplateExpression left() {
+        return left;
+    }
+
+    TemplateExpression right() {
+        return right;
     }
 }
 

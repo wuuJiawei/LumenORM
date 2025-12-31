@@ -28,7 +28,7 @@ class SqlTemplateProcessorTest {
 
             public interface OrderRepo {
                 @SqlTemplate("SELECT 1")
-                void ping();
+                void ping() throws java.sql.SQLException;
             }
             """;
         CompilationResult result = compile("example.OrderRepo", source);
@@ -39,6 +39,11 @@ class SqlTemplateProcessorTest {
         String content = Files.readString(generated);
         assertTrue(content.contains("SELECT 1"));
         assertTrue(content.contains("PING_TEMPLATE"));
+
+        Path impl = result.outputDir().resolve("example").resolve("OrderRepo_Impl.java");
+        assertTrue(Files.exists(impl));
+        String implContent = Files.readString(impl);
+        assertTrue(implContent.contains("class OrderRepo_Impl"));
     }
 
     @Test
@@ -73,6 +78,61 @@ class SqlTemplateProcessorTest {
         assertTrue(!result.success());
         assertTrue(result.diagnostics().stream()
             .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("static final field")));
+    }
+
+    @Test
+    void rejectsMissingBindings() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.annotations.SqlTemplate;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT * FROM orders WHERE id = :id")
+                void load(String name) throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("Missing template bindings")));
+    }
+
+    @Test
+    void rejectsOrderByParamsInAllowedFragments() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.annotations.SqlTemplate;
+
+            public interface OrderRepo {
+                @SqlTemplate("@orderBy(:sort, allowed = { BAD : :bad })")
+                void load(String sort, String bad) throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("@orderBy fragments must not use parameters")));
+    }
+
+    @Test
+    void requiresRowMapperForListReturn() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.annotations.SqlTemplate;
+            import java.util.List;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT 1")
+                List<String> load() throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("RowMapper parameter")));
     }
 
     private CompilationResult compile(String name, String source) throws IOException {
