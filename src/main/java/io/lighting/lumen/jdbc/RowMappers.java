@@ -5,11 +5,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Time;
-import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -55,7 +54,7 @@ public final class RowMappers {
                     name = column.name();
                 }
             }
-            specs[i] = new ColumnSpec(name, component.getType());
+            specs[i] = new ColumnSpec(name, component.getGenericType());
         }
         Constructor<T> ctor = constructor(type, paramTypes);
         return resultSet -> {
@@ -66,7 +65,7 @@ public final class RowMappers {
                 Integer index = indexes.get(normalize(spec.columnName));
                 Object value = null;
                 if (index != null) {
-                    value = readValue(resultSet, index, spec.type);
+                    value = JdbcTypeAdapters.read(resultSet, index, spec.type);
                 }
                 args[i] = defaultIfPrimitive(spec.type, value);
             }
@@ -95,7 +94,7 @@ public final class RowMappers {
                     continue;
                 }
                 Field field = entry.getValue();
-                Object value = readValue(resultSet, index, field.getType());
+                Object value = JdbcTypeAdapters.read(resultSet, index, field.getGenericType());
                 if (value == null && field.getType().isPrimitive()) {
                     continue;
                 }
@@ -141,86 +140,33 @@ public final class RowMappers {
         return fields;
     }
 
-    private static Object readValue(ResultSet resultSet, int index, Class<?> targetType) throws SQLException {
-        Class<?> boxed = boxType(targetType);
-        Object value;
-        try {
-            value = resultSet.getObject(index, boxed);
-        } catch (SQLException ex) {
-            value = resultSet.getObject(index);
-        }
-        if (value == null) {
-            return null;
-        }
-        if (boxed.isInstance(value)) {
+    private static Object defaultIfPrimitive(Type type, Object value) {
+        Class<?> raw = JdbcTypeAdapters.rawClass(type);
+        if (value != null || raw == null || !raw.isPrimitive()) {
             return value;
         }
-        if (value instanceof Number number) {
-            return convertNumber(number, boxed);
-        }
-        if (boxed == String.class) {
-            return value.toString();
-        }
-        if (boxed == java.time.LocalDate.class && value instanceof java.sql.Date date) {
-            return date.toLocalDate();
-        }
-        if (boxed == java.time.LocalDateTime.class && value instanceof Timestamp timestamp) {
-            return timestamp.toLocalDateTime();
-        }
-        if (boxed == java.time.LocalTime.class && value instanceof Time time) {
-            return time.toLocalTime();
-        }
-        return value;
-    }
-
-    private static Object convertNumber(Number number, Class<?> targetType) {
-        if (targetType == Integer.class) {
-            return number.intValue();
-        }
-        if (targetType == Long.class) {
-            return number.longValue();
-        }
-        if (targetType == Short.class) {
-            return number.shortValue();
-        }
-        if (targetType == Byte.class) {
-            return number.byteValue();
-        }
-        if (targetType == Double.class) {
-            return number.doubleValue();
-        }
-        if (targetType == Float.class) {
-            return number.floatValue();
-        }
-        return number;
-    }
-
-    private static Object defaultIfPrimitive(Class<?> type, Object value) {
-        if (value != null || !type.isPrimitive()) {
-            return value;
-        }
-        if (type == boolean.class) {
+        if (raw == boolean.class) {
             return false;
         }
-        if (type == char.class) {
+        if (raw == char.class) {
             return '\0';
         }
-        if (type == byte.class) {
+        if (raw == byte.class) {
             return (byte) 0;
         }
-        if (type == short.class) {
+        if (raw == short.class) {
             return (short) 0;
         }
-        if (type == int.class) {
+        if (raw == int.class) {
             return 0;
         }
-        if (type == long.class) {
+        if (raw == long.class) {
             return 0L;
         }
-        if (type == float.class) {
+        if (raw == float.class) {
             return 0f;
         }
-        if (type == double.class) {
+        if (raw == double.class) {
             return 0d;
         }
         return null;
@@ -251,37 +197,6 @@ public final class RowMappers {
         return null;
     }
 
-    private static Class<?> boxType(Class<?> type) {
-        if (!type.isPrimitive()) {
-            return type;
-        }
-        if (type == boolean.class) {
-            return Boolean.class;
-        }
-        if (type == char.class) {
-            return Character.class;
-        }
-        if (type == byte.class) {
-            return Byte.class;
-        }
-        if (type == short.class) {
-            return Short.class;
-        }
-        if (type == int.class) {
-            return Integer.class;
-        }
-        if (type == long.class) {
-            return Long.class;
-        }
-        if (type == float.class) {
-            return Float.class;
-        }
-        if (type == double.class) {
-            return Double.class;
-        }
-        return type;
-    }
-
-    private record ColumnSpec(String columnName, Class<?> type) {
+    private record ColumnSpec(String columnName, Type type) {
     }
 }
