@@ -20,15 +20,10 @@ import io.lighting.lumen.sql.SqlRenderer;
 import io.lighting.lumen.template.EntityNameResolver;
 import io.lighting.lumen.template.EntityNameResolvers;
 import io.lighting.lumen.template.TemplateContext;
-import io.lighting.lumen.jdbc.RowMapper;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -163,7 +158,7 @@ class SqlAnnotationCrudExampleTest {
             List.of("NEW"),
             "ID_ASC"
         );
-        List<OrderEntity> rows = db.fetch(Query.of(rendered), autoMapper(OrderEntity.class));
+        List<OrderEntity> rows = db.fetch(Query.of(rendered), OrderEntity.class);
 
         assertEquals(2, rows.size());
         assertEquals("NEW", rows.get(0).status);
@@ -215,46 +210,6 @@ class SqlAnnotationCrudExampleTest {
         RenderedSql insert = render(INSERT_SQL, Bindings.of("status", status, "total", total));
         Long id = db.executeAndReturnGeneratedKey(Command.of(insert), "ID", rs -> rs.getLong(1));
         return id;
-    }
-
-    private static <T> RowMapper<T> autoMapper(Class<T> type) {
-        Map<String, Field> fieldMap = fieldMap(type);
-        return rs -> {
-            try {
-                T instance = type.getDeclaredConstructor().newInstance();
-                java.sql.ResultSetMetaData meta = rs.getMetaData();
-                for (int i = 1; i <= meta.getColumnCount(); i++) {
-                    String label = normalize(meta.getColumnLabel(i));
-                    Field field = fieldMap.get(label);
-                    if (field != null) {
-                        field.setAccessible(true);
-                        field.set(instance, rs.getObject(i));
-                    }
-                }
-                return instance;
-            } catch (ReflectiveOperationException ex) {
-                throw new IllegalStateException("Failed to map row to " + type.getSimpleName(), ex);
-            }
-        };
-    }
-
-    private static Map<String, Field> fieldMap(Class<?> type) {
-        Map<String, Field> fields = new LinkedHashMap<>();
-        for (Class<?> current = type; current != null && current != Object.class; current = current.getSuperclass()) {
-            for (Field field : current.getDeclaredFields()) {
-                if (Modifier.isStatic(field.getModifiers()) || Modifier.isTransient(field.getModifiers())) {
-                    continue;
-                }
-                Column column = field.getAnnotation(Column.class);
-                String name = column != null && !column.name().isBlank() ? column.name() : field.getName();
-                fields.putIfAbsent(normalize(name), field);
-            }
-        }
-        return fields;
-    }
-
-    private static String normalize(String value) {
-        return value.toLowerCase(Locale.ROOT);
     }
 
     interface OrderTemplateDao {
