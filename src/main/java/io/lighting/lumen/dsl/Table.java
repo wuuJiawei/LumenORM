@@ -41,4 +41,14 @@ public final class Table {
         String column = macros.column(entityType, fieldName);
         return new ColumnRef(alias, column);
     }
+
+    public <T> ColumnRef col(PropertyRef<T, ?> ref) {
+        LambdaProperty.Property property = LambdaProperty.resolve(ref);
+        if (!property.owner().isAssignableFrom(entityType) && !entityType.isAssignableFrom(property.owner())) {
+            throw new IllegalArgumentException(
+                "Lambda target type mismatch: expected " + entityType.getName() + " but got " + property.owner().getName()
+            );
+        }
+        return col(property.name());
+    }
 }

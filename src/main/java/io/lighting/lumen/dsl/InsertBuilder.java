@@ -9,11 +9,13 @@ import java.util.Objects;
 
 public final class InsertBuilder {
     private final TableRef table;
+    private final Table tableInfo;
     private final List<String> columns = new ArrayList<>();
     private final List<List<Expr>> rows = new ArrayList<>();
 
-    InsertBuilder(TableRef table) {
-        this.table = Objects.requireNonNull(table, "table");
+    InsertBuilder(Table table) {
+        this.tableInfo = Objects.requireNonNull(table, "table");
+        this.table = table.ref();
     }
 
     public InsertBuilder columns(String... names) {
@@ -34,6 +36,16 @@ public final class InsertBuilder {
         for (ColumnRef ref : refs) {
             Objects.requireNonNull(ref, "ref");
             columns.add(ref.expr().columnName());
+        }
+        return this;
+    }
+
+    public <T> InsertBuilder columns(PropertyRef<T, ?>... refs) {
+        Objects.requireNonNull(refs, "refs");
+        columns.clear();
+        for (PropertyRef<T, ?> ref : refs) {
+            Objects.requireNonNull(ref, "ref");
+            columns.add(tableInfo.col(ref).expr().columnName());
         }
         return this;
     }

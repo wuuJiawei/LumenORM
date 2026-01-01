@@ -10,18 +10,25 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 public final class UpdateBuilder {
+    private final Table tableInfo;
     private final TableRef table;
     private final List<UpdateItem> assignments = new ArrayList<>();
     private Expr where;
 
-    UpdateBuilder(TableRef table) {
-        this.table = Objects.requireNonNull(table, "table");
+    UpdateBuilder(Table table) {
+        this.tableInfo = Objects.requireNonNull(table, "table");
+        this.table = table.ref();
     }
 
     public UpdateBuilder set(ColumnRef column, Object value) {
         Objects.requireNonNull(column, "column");
         assignments.add(new UpdateItem(column.expr(), toExpr(value)));
         return this;
+    }
+
+    public <T> UpdateBuilder set(PropertyRef<T, ?> column, Object value) {
+        Objects.requireNonNull(column, "column");
+        return set(tableInfo.col(column), value);
     }
 
     public UpdateBuilder where(Expr expr) {

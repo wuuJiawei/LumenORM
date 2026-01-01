@@ -43,12 +43,12 @@ public final class Dsl {
 
     public InsertBuilder insertInto(Table table) {
         Objects.requireNonNull(table, "table");
-        return new InsertBuilder(table.ref());
+        return new InsertBuilder(table);
     }
 
     public UpdateBuilder update(Table table) {
         Objects.requireNonNull(table, "table");
-        return new UpdateBuilder(table.ref());
+        return new UpdateBuilder(table);
     }
 
     public DeleteBuilder deleteFrom(Table table) {

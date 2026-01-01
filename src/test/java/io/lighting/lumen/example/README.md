@@ -32,6 +32,12 @@
 ### 4) 原生 SQL + 手动绑定（Delete）
 - 直接构造 `RenderedSql` 并使用 `Bind.Value` 手动绑定，适合与现有 SQL 直接对接。
 
+### 5) Lambda 字段引用（DSL）
+- 通过 `Order::status` / `Order::getStatus` 这种方法引用来选择列和更新字段。
+- `dsl.insertInto(table).columns(Order::status, Order::total)` / `dsl.update(table).set(Order::status, value)`。
+- 字段解析结果会缓存，避免重复的反射开销。
+ - 对应示例：`MysqlLambdaDslExampleTest`。
+
 ## 自动映射与自定义类型
 
 - `Db.fetch(Query, Class<T>)` 会使用 `RowMappers.auto(...)`。

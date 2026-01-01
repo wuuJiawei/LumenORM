@@ -386,6 +386,13 @@ UpdateStmt update = dsl.update(o)
     .where(o.col("id").eq(param("id")))
     .build();
 
+// Lambda 字段引用（方法引用会缓存解析结果，避免重复反射）
+var orders = dsl.table(Order.class);
+UpdateStmt updateByLambda = dsl.update(orders)
+    .set(Order::status, param("status"))
+    .where(orders.col(Order::id).eq(param("id")))
+    .build();
+
 DeleteStmt delete = dsl.deleteFrom(o)
     .where(o.col("id").eq(param("id")))
     .build();
