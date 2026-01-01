@@ -468,6 +468,22 @@ public interface Db {
 * `beforeExecute/afterExecute`：可记录执行耗时、影响行数/返回行数；
 * `onRenderError/onExecuteError`：用于埋点错误与失败场景。
 
+#### 10.4.1 SQL 打印插件（可选）
+
+通过 `SqlLog` 作为 `DbObserver` 插件挂载到 `DefaultDb`：
+
+```java
+SqlLog log = SqlLog.builder()
+    .mode(SqlLog.Mode.INLINE)     // INLINE: 内联参数；SEPARATE: SQL + binds
+    .includeElapsed(true)         // 可选：记录耗时
+    .includeRowCount(true)        // 可选：记录影响行数
+    .build();
+
+DefaultDb db = new DefaultDb(executor, renderer, dialect, metaRegistry, resolver, List.of(log));
+```
+
+默认只在执行阶段打印；可通过 `logOnRender(true)` 额外记录渲染阶段日志。
+
 ### 10.5 事务辅助（回调式）
 
 提供 `TransactionManager`，在回调中复用同一连接：

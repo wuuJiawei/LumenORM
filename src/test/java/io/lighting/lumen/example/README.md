@@ -36,7 +36,12 @@
 - 通过 `Order::status` / `Order::getStatus` 这种方法引用来选择列和更新字段。
 - `dsl.insertInto(table).columns(Order::status, Order::total)` / `dsl.update(table).set(Order::status, value)`。
 - 字段解析结果会缓存，避免重复的反射开销。
- - 对应示例：`MysqlLambdaDslExampleTest`。
+- 对应示例：`MysqlLambdaDslExampleTest`。
+
+### 6) SQL 打印（插件/拦截器）
+- 使用 `SqlLog` 作为 `DbObserver` 挂载到 `DefaultDb`。
+- 支持两种打印模式：`SEPARATE`（SQL 与参数分开）与 `INLINE`（内联参数）。
+- 对应示例：`SqlLogExampleTest`。
 
 ## 自动映射与自定义类型
 
