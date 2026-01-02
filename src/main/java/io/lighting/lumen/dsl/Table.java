@@ -1,6 +1,7 @@
 package io.lighting.lumen.dsl;
 
 import io.lighting.lumen.meta.IdentifierMacros;
+import io.lighting.lumen.sql.ast.Expr;
 import io.lighting.lumen.sql.ast.TableRef;
 import java.util.Objects;
 
@@ -50,5 +51,17 @@ public final class Table {
             );
         }
         return col(property.name());
+    }
+
+    public LogicalDelete logicalDelete() {
+        io.lighting.lumen.meta.LogicDeleteMeta meta = macros.metaOf(entityType)
+            .logicDeleteMeta()
+            .orElseThrow(() -> new IllegalArgumentException("No @LogicDelete on " + entityType.getName()));
+        ColumnRef column = new ColumnRef(alias, meta.columnName());
+        return new LogicalDelete(column, meta.activeValue(), meta.deletedValue());
+    }
+
+    public Expr notDeleted() {
+        return logicalDelete().isActive();
     }
 }

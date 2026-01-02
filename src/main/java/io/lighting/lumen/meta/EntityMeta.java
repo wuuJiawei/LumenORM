@@ -9,8 +9,14 @@ public final class EntityMeta {
     private final String table;
     private final Map<String, String> fieldToColumn;
     private final Set<String> columns;
+    private final IdMeta idMeta;
+    private final LogicDeleteMeta logicDeleteMeta;
 
     public EntityMeta(String table, Map<String, String> fieldToColumn) {
+        this(table, fieldToColumn, null, null);
+    }
+
+    public EntityMeta(String table, Map<String, String> fieldToColumn, IdMeta idMeta, LogicDeleteMeta logicDeleteMeta) {
         Objects.requireNonNull(table, "table");
         if (table.isBlank()) {
             throw new IllegalArgumentException("table must not be blank");
@@ -19,6 +25,8 @@ public final class EntityMeta {
         this.table = table;
         this.fieldToColumn = Map.copyOf(fieldToColumn);
         this.columns = Set.copyOf(new LinkedHashSet<>(fieldToColumn.values()));
+        this.idMeta = idMeta;
+        this.logicDeleteMeta = logicDeleteMeta;
     }
 
     public String table() {
@@ -31,6 +39,14 @@ public final class EntityMeta {
 
     public Set<String> columns() {
         return columns;
+    }
+
+    public java.util.Optional<IdMeta> idMeta() {
+        return java.util.Optional.ofNullable(idMeta);
+    }
+
+    public java.util.Optional<LogicDeleteMeta> logicDeleteMeta() {
+        return java.util.Optional.ofNullable(logicDeleteMeta);
     }
 
     public String columnForField(String fieldName) {

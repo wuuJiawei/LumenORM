@@ -192,7 +192,20 @@ public @interface Column { String name(); }
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
-public @interface Id {}
+public @interface Id {
+  IdStrategy strategy() default IdStrategy.AUTO;
+}
+
+public enum IdStrategy {
+  AUTO, UUID, SNOWFLAKE
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+public @interface LogicDelete {
+  String active() default "0";
+  String deleted() default "1";
+}
 ```
 
 ### 5.2 运行时反射缓存（MVP）
@@ -202,6 +215,8 @@ public final class EntityMeta {
   public final String table;
   public final Map<String, String> fieldToColumn;
   public final Set<String> columns;
+  public final Optional<IdMeta> idMeta;
+  public final Optional<LogicDeleteMeta> logicDeleteMeta;
   // ...
 }
 
@@ -233,8 +248,40 @@ public final class QOrder {
 当前实现约定：
 
 * 处理所有标注 `@Table` 的类型；
-* 仅输出标注 `@Column` 或 `@Id` 的字段；
+* 仅输出标注 `@Column` / `@Id` / `@LogicDelete` 的字段；
 * 生成方法返回 `ColumnRef.of(alias, "column")`，可直接用于 DSL/AST。
+
+### 5.4 ID 策略与逻辑删除
+
+ID 策略：
+
+```java
+@Table(name = "orders")
+class Order {
+  @Id(strategy = IdStrategy.SNOWFLAKE)
+  private long id;
+}
+
+EntityIdGenerator ids = new EntityIdGenerator(metaRegistry);
+Object nextId = ids.generate(Order.class).orElse(null); // AUTO 时为空
+```
+
+逻辑删除：
+
+```java
+@Table(name = "orders")
+class Order {
+  @LogicDelete(active = "0", deleted = "1")
+  private int deleted;
+}
+
+var o = dsl.table(Order.class).as("o");
+UpdateStmt logicalDelete = dsl.logicalDeleteFrom(o)
+    .where(o.col(Order::id).eq(param("id")))
+    .build();
+
+Expr onlyActive = o.notDeleted();
+```
 
 ---
 

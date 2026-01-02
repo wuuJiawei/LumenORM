@@ -56,6 +56,11 @@ public final class Dsl {
         return new DeleteBuilder(table.ref());
     }
 
+    public LogicalDeleteBuilder logicalDeleteFrom(Table table) {
+        Objects.requireNonNull(table, "table");
+        return new LogicalDeleteBuilder(table);
+    }
+
     public static SelectItem item(Expr expr) {
         Objects.requireNonNull(expr, "expr");
         return new SelectItem(expr, null);

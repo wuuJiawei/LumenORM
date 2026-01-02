@@ -7,6 +7,8 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
-public @interface Id {
-    IdStrategy strategy() default IdStrategy.AUTO;
+public @interface LogicDelete {
+    String active() default "0";
+
+    String deleted() default "1";
 }

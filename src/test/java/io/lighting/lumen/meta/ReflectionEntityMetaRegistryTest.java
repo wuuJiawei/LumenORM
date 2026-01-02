@@ -20,7 +20,12 @@ class ReflectionEntityMetaRegistryTest {
         assertEquals("id", meta.columnForField("id"));
         assertEquals("status", meta.columnForField("status"));
         assertEquals("created_at", meta.columnForField("createdAt"));
-        assertEquals(3, meta.fieldToColumn().size());
+        assertEquals(4, meta.fieldToColumn().size());
+        assertEquals(IdStrategy.UUID, meta.idMeta().orElseThrow().strategy());
+        LogicDeleteMeta logicDeleteMeta = meta.logicDeleteMeta().orElseThrow();
+        assertEquals("deleted", logicDeleteMeta.columnName());
+        assertEquals(0, logicDeleteMeta.activeValue());
+        assertEquals(1, logicDeleteMeta.deletedValue());
     }
 
     @Test
@@ -50,6 +55,16 @@ class ReflectionEntityMetaRegistryTest {
     }
 
     @Test
+    void duplicateLogicDeleteFails() {
+        assertThrows(IllegalArgumentException.class, () -> registry.metaOf(DuplicateLogicDelete.class));
+    }
+
+    @Test
+    void invalidLogicDeleteValueFails() {
+        assertThrows(IllegalArgumentException.class, () -> registry.metaOf(InvalidLogicDelete.class));
+    }
+
+    @Test
     void identifierMacrosResolveSafeNames() {
         IdentifierMacros macros = new IdentifierMacros(registry);
 
@@ -65,12 +80,16 @@ class ReflectionEntityMetaRegistryTest {
 
     @Table(name = "orders")
     private static final class OrderEntity extends BaseEntity {
-        @Id
+        @Id(strategy = IdStrategy.UUID)
         @Column(name = "id")
         private long id;
 
         @Column(name = "status")
         private String status;
+
+        @LogicDelete(active = "0", deleted = "1")
+        @Column(name = "deleted")
+        private int deleted;
 
         private String ignored;
     }
@@ -98,5 +117,26 @@ class ReflectionEntityMetaRegistryTest {
 
         @Column(name = "id")
         private long otherId;
+    }
+
+    @Table(name = "dup_logic")
+    private static final class DuplicateLogicDelete {
+        @Id
+        private long id;
+
+        @LogicDelete
+        private int deleted;
+
+        @LogicDelete
+        private int removed;
+    }
+
+    @Table(name = "invalid_logic")
+    private static final class InvalidLogicDelete {
+        @Id
+        private long id;
+
+        @LogicDelete(active = "x", deleted = "y")
+        private int deleted;
     }
 }

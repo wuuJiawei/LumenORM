@@ -11,6 +11,10 @@ public final class IdentifierMacros {
         this.registry = Objects.requireNonNull(registry, "registry");
     }
 
+    public EntityMeta metaOf(Class<?> entityType) {
+        return registry.metaOf(entityType);
+    }
+
     public String table(Class<?> entityType) {
         return registry.metaOf(entityType).table();
     }
