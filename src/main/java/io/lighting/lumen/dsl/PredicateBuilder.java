@@ -49,7 +49,7 @@ public final class PredicateBuilder {
         return this;
     }
 
-    Expr build() {
+    public Expr build() {
         if (items.isEmpty()) {
             return null;
         }
