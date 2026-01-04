@@ -7,20 +7,20 @@ import io.lighting.lumen.meta.IdStrategy;
 import io.lighting.lumen.meta.LogicDelete;
 import io.lighting.lumen.meta.Table;
 
-@Table(name = "orders")
+@Table(name = "ORDERS")
 public class OrderModel extends Model<OrderModel> {
     @Id(strategy = IdStrategy.AUTO)
-    @Column(name = "id")
+    @Column(name = "ID")
     private Long id;
 
-    @Column(name = "order_no")
+    @Column(name = "ORDER_NO")
     private String orderNo;
 
-    @Column(name = "status")
+    @Column(name = "STATUS")
     private String status;
 
     @LogicDelete(active = "0", deleted = "1")
-    @Column(name = "deleted")
+    @Column(name = "DELETED")
     private Integer deleted;
 
     public OrderModel() {

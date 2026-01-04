@@ -5,16 +5,16 @@ import io.lighting.lumen.meta.Id;
 import io.lighting.lumen.meta.IdStrategy;
 import io.lighting.lumen.meta.Table;
 
-@Table(name = "order_items")
+@Table(name = "ORDER_ITEMS")
 public class OrderItemRecord {
     @Id(strategy = IdStrategy.AUTO)
-    @Column(name = "id")
+    @Column(name = "ID")
     private Long id;
 
-    @Column(name = "order_id")
+    @Column(name = "ORDER_ID")
     private Long orderId;
 
-    @Column(name = "sku")
+    @Column(name = "SKU")
     private String sku;
 
     public OrderItemRecord() {

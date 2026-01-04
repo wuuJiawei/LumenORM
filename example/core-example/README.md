@@ -33,18 +33,28 @@ Db db = new DefaultDb(executor, renderer, dialect, metaRegistry, nameResolver);
 ```java
 Lumen lumen = Lumen.builder()
     .dataSource(dataSource)
-    .dialect(dialect)
-    .metaRegistry(metaRegistry)
+    .build();
+
+Db db = lumen.db();
+Dsl dsl = lumen.dsl();
+```
+
+可选配置（按需打开）：
+
+```java
+Lumen lumen = Lumen.builder()
+    .dataSource(dataSource)
+    // 方言：分页语法与标识符引用规则（默认 ANSI 双引号；MySQL/Oracle 建议显式指定）
+    .dialect(new LimitOffsetDialect("\""))
+    // 元数据：@Table/@Column/@Id 的映射来源
+    .metaRegistry(new ReflectionEntityMetaRegistry())
+    // 模板解析：@table(OrderRecord) 这类短名的解析与映射
     .entityNameResolver(EntityNameResolvers.from(Map.of(
         "OrderRecord", OrderRecord.class,
         "OrderItemRecord", OrderItemRecord.class,
         "OrderModel", OrderModel.class
     )))
     .build();
-
-OrderDao dao = lumen.dao(OrderDao.class);
-Dsl dsl = lumen.dsl();
-Db db = lumen.db();
 ```
 
 ## DSL Select + Join + Paging
@@ -88,6 +98,74 @@ DeleteStmt delete = dsl.deleteFrom(orders)
     .build();
 ```
 
+## Runnable H2 Example (Db.run + execute)
+
+```java
+Lumen lumen = Lumen.builder()
+    .dataSource(dataSource)
+    .build();
+
+Db db = lumen.db();
+db.execute(Command.of(new RenderedSql(
+    "CREATE TABLE orders (id BIGINT PRIMARY KEY, order_no VARCHAR(64), status VARCHAR(32), total DECIMAL(10,2))",
+    List.of()
+)));
+
+RenderedSql insert = new RenderedSql(
+    "INSERT INTO orders(id, order_no, status, total) VALUES (?, ?, ?, ?)",
+    List.of(new Bind.Value(1L, 0), new Bind.Value("NO-1", 0), new Bind.Value("NEW", 0), new Bind.Value(10, 0))
+);
+db.execute(Command.of(insert));
+
+List<OrderRow> rows = db.run(
+    "SELECT id, order_no, status FROM orders WHERE status = :status",
+    Bindings.of("status", "NEW"),
+    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status"))
+);
+```
+
+## H2 SqlTemplate Example
+
+```java
+@SqlConst
+static final String FIND_SQL = """
+    SELECT o.id, o.order_no, o.status
+    FROM @table(io.lighting.lumen.example.OrderRecord) o
+    @where {
+      @if(status != null) { o.status = :status }
+      @if(ids != null && !ids.isEmpty()) { AND o.id IN @in(:ids) }
+    }
+    """;
+
+List<OrderRow> rows = db.run(
+    FIND_SQL,
+    Bindings.of("status", "NEW", "ids", List.of(1L, 2L)),
+    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status"))
+);
+```
+
+## H2 Lambda DSL Example
+
+```java
+Dsl dsl = lumen.dsl();
+Table orders = dsl.table(OrderRecord.class).as("o");
+
+List<OrderRow> rows = db.fetch(
+    Query.of(
+        dsl.select(
+                orders.col(OrderRecord::getId).as("id"),
+                orders.col(OrderRecord::getOrderNo).as("order_no"),
+                orders.col(OrderRecord::getStatus).as("status")
+            )
+            .from(orders)
+            .where(orders.col(OrderRecord::getStatus).eq(Dsl.param("status")))
+            .build(),
+        Bindings.of("status", "NEW")
+    ),
+    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status"))
+);
+```
+
 ## Template SQL
 
 ```java
@@ -110,64 +188,24 @@ Bindings bindings = Bindings.of(
     "pageSize", 50
 );
 
-SqlTemplate template = SqlTemplate.parse(sql);
-TemplateContext context = new TemplateContext(bindings.asMap(), dialect, metaRegistry, nameResolver);
-RenderedSql rendered = template.render(context);
+List<OrderRow> rows = db.run(
+    sql,
+    bindings,
+    rs -> new OrderRow(rs.getLong("id"), null, rs.getString("status"))
+);
 ```
 
-## DAO Interface (SqlTemplate)
-
-```java
-public interface OrderDao {
-  @SqlTemplate("""
-    SELECT o.id, o.order_no, o.status
-    FROM @table(OrderRecord) o
-    WHERE o.id = :id
-  """)
-  List<OrderRow> findById(Long id, RowMapper<OrderRow> mapper) throws SQLException;
-
-  @SqlTemplate("""
-    SELECT o.id, o.order_no, o.status
-    FROM @table(OrderRecord) o
-    @where {
-      @if(filter != null && filter.status != null) { o.status = :filter.status }
-      @if(filter != null && filter.ids != null && !filter.ids.isEmpty()) {
-        AND o.id IN @in(:filter.ids)
-      }
-    }
-    @orderBy(:sort, allowed = { CREATED_DESC : o.id DESC, STATUS_ASC : o.status ASC }, default = CREATED_DESC)
-    @page(:page, :pageSize)
-  """)
-  List<OrderRow> search(
-      OrderFilter filter,
-      String sort,
-      int page,
-      int pageSize,
-      RowMapper<OrderRow> mapper
-  ) throws SQLException;
-
-  @SqlTemplate("""
-    UPDATE @table(OrderRecord)
-    SET status = :status
-    WHERE id = :id
-  """)
-  int updateStatus(Long id, String status) throws SQLException;
-}
-```
-
-```java
-OrderDao dao = new OrderDao_Impl(db, dialect, metaRegistry, nameResolver);
-OrderFilter filter = new OrderFilter(List.of(1L, 2L), "NEW");
-List<OrderRow> rows = dao.search(filter, "CREATED_DESC", 1, 20, mapper);
-```
-
-Note: `@table(OrderRecord)` resolves through `EntityNameResolver`, so map short names like
-`OrderRecord` to the entity class when building the DAO instance.
+说明：模板里使用 `@table(OrderRecord)` 这类短名时，需要在 `Lumen` 中配置
+`entityNameResolver` 进行短名映射。
 
 ## Db.run (Template at Runtime)
 
 ```java
-List<OrderRow> rows = db.run(sql, bindings, OrderRowMapper.INSTANCE);
+List<OrderRow> rows = db.run(
+    sql,
+    bindings,
+    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status"))
+);
 ```
 
 ## ActiveRecord Setup
@@ -236,7 +274,11 @@ int[] results = db.executeBatch(batch);
 ## Stream Fetch
 
 ```java
-try (ResultStream<OrderRow> stream = db.fetchStream(Query.of(rendered), OrderRowMapper.INSTANCE, 500)) {
+try (ResultStream<OrderRow> stream = db.fetchStream(
+    Query.of(rendered),
+    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status")),
+    500
+)) {
     while (stream.next()) {
         OrderRow row = stream.row();
         // handle row
@@ -271,23 +313,4 @@ Db dbWithLog = new DefaultDb(executor, renderer, dialect, metaRegistry, nameReso
 ```java
 String name = PropertyNames.name(OrderRecord::getStatus); // "status"
 Class<?> owner = PropertyNames.owner(OrderRecord::getStatus); // OrderRecord.class
-```
-
-## APT Entry Points
-
-```java
-@SqlTemplate("""
-  SELECT o.id, o.status
-  FROM @table(OrderRecord) o
-  WHERE o.id = :id
-""")
-List<OrderRow> findById(Long id, RowMapper<OrderRow> mapper) throws SQLException;
-```
-
-```java
-@SqlConst
-static final String FIND_ALL = """
-  SELECT o.id, o.status
-  FROM @table(OrderRecord) o
-""";
 ```

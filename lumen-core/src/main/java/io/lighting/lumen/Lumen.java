@@ -6,9 +6,12 @@ import io.lighting.lumen.db.DefaultDb;
 import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.meta.EntityMetaRegistry;
+import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.SqlRenderer;
+import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
 import io.lighting.lumen.template.EntityNameResolver;
+import io.lighting.lumen.template.EntityNameResolvers;
 import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
@@ -99,9 +102,9 @@ public final class Lumen {
     public static final class Builder {
         private DataSource dataSource;
         private Db db;
-        private Dialect dialect;
-        private EntityMetaRegistry metaRegistry;
-        private EntityNameResolver entityNameResolver;
+        private Dialect dialect = new LimitOffsetDialect("\"");
+        private EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        private EntityNameResolver entityNameResolver = EntityNameResolvers.from(Map.of());
         private SqlRenderer renderer;
         private List<DbObserver> observers = List.of();
 
@@ -118,16 +121,19 @@ public final class Lumen {
             return this;
         }
 
+        // 方言：负责分页语法与标识符引用，不同数据库需要不同实现。
         public Builder dialect(Dialect dialect) {
             this.dialect = Objects.requireNonNull(dialect, "dialect");
             return this;
         }
 
+        // 元数据注册表：从 @Table/@Column/@Id 中解析表和列。
         public Builder metaRegistry(EntityMetaRegistry metaRegistry) {
             this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
             return this;
         }
 
+        // 模板解析：用于 @table(OrderRecord) 这类短名的解析与映射。
         public Builder entityNameResolver(EntityNameResolver entityNameResolver) {
             this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
             return this;
@@ -144,9 +150,6 @@ public final class Lumen {
         }
 
         public Lumen build() {
-            Objects.requireNonNull(dialect, "dialect");
-            Objects.requireNonNull(metaRegistry, "metaRegistry");
-            Objects.requireNonNull(entityNameResolver, "entityNameResolver");
             SqlRenderer finalRenderer = renderer == null ? new SqlRenderer(dialect) : renderer;
             Db finalDb = db;
             if (finalDb == null) {
