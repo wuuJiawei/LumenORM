@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
-import io.lighting.lumen.annotations.SqlConst;
+import io.lighting.lumen.template.annotations.SqlConst;
 import io.lighting.lumen.db.Command;
 import io.lighting.lumen.db.DefaultDb;
 import io.lighting.lumen.db.Query;

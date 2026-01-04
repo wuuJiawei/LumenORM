@@ -1,6 +1,6 @@
 package io.lighting.lumen.example.dao;
 
-import io.lighting.lumen.annotations.SqlTemplate;
+import io.lighting.lumen.template.annotations.SqlTemplate;
 import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.sql.RenderedSql;
 import java.sql.SQLException;

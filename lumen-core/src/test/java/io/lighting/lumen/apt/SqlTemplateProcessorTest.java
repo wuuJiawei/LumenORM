@@ -24,7 +24,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlTemplate;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
 
             public interface OrderRepo {
                 @SqlTemplate("SELECT 1")
@@ -51,7 +51,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlConst;
+            import io.lighting.lumen.template.annotations.SqlConst;
 
             public final class Consts {
                 @SqlConst
@@ -67,7 +67,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlConst;
+            import io.lighting.lumen.template.annotations.SqlConst;
 
             public final class Consts {
                 @SqlConst
@@ -85,7 +85,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlTemplate;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
 
             public interface OrderRepo {
                 @SqlTemplate("SELECT * FROM orders WHERE id = :id")
@@ -103,7 +103,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlTemplate;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
 
             public interface OrderRepo {
                 @SqlTemplate("@orderBy(:sort, allowed = { BAD : :bad })")
@@ -121,7 +121,7 @@ class SqlTemplateProcessorTest {
         String source = """
             package example;
 
-            import io.lighting.lumen.annotations.SqlTemplate;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
             import java.util.List;
 
             public interface OrderRepo {

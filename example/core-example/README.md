@@ -28,6 +28,25 @@ JdbcExecutor executor = new JdbcExecutor(dataSource);
 Db db = new DefaultDb(executor, renderer, dialect, metaRegistry, nameResolver);
 ```
 
+## Lumen Bootstrap
+
+```java
+Lumen lumen = Lumen.builder()
+    .dataSource(dataSource)
+    .dialect(dialect)
+    .metaRegistry(metaRegistry)
+    .entityNameResolver(EntityNameResolvers.from(Map.of(
+        "OrderRecord", OrderRecord.class,
+        "OrderItemRecord", OrderItemRecord.class,
+        "OrderModel", OrderModel.class
+    )))
+    .build();
+
+OrderDao dao = lumen.dao(OrderDao.class);
+Dsl dsl = lumen.dsl();
+Db db = lumen.db();
+```
+
 ## DSL Select + Join + Paging
 
 ```java

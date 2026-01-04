@@ -2,8 +2,8 @@ package io.lighting.lumen.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.lighting.lumen.annotations.SqlConst;
-import io.lighting.lumen.annotations.SqlTemplate;
+import io.lighting.lumen.template.annotations.SqlConst;
+import io.lighting.lumen.template.annotations.SqlTemplate;
 import io.lighting.lumen.db.Command;
 import io.lighting.lumen.db.DefaultDb;
 import io.lighting.lumen.db.Query;

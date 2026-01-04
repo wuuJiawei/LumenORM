@@ -1,7 +1,7 @@
 package io.lighting.lumen.apt;
 
-import io.lighting.lumen.annotations.SqlConst;
-import io.lighting.lumen.annotations.SqlTemplate;
+import io.lighting.lumen.template.annotations.SqlConst;
+import io.lighting.lumen.template.annotations.SqlTemplate;
 import io.lighting.lumen.template.SqlTemplateAnalysis;
 import io.lighting.lumen.template.SqlTemplateAnalyzer;
 import java.io.IOException;
@@ -32,8 +32,8 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 @SupportedAnnotationTypes({
-    "io.lighting.lumen.annotations.SqlTemplate",
-    "io.lighting.lumen.annotations.SqlConst"
+    "io.lighting.lumen.template.annotations.SqlTemplate",
+    "io.lighting.lumen.template.annotations.SqlConst"
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class SqlTemplateProcessor extends AbstractProcessor {
