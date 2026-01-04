@@ -324,6 +324,9 @@ public final class LimitOffsetDialect implements Dialect {
 
 > 说明：SQL Server/Oracle 等可另写方言；函数差异由 `renderFunction` 处理（如需覆盖）。
 
+默认情况下，`Lumen.builder()` 会基于 `DataSource` 自动识别方言（内部使用 `DialectResolver`）。
+如需手动构建，可直接调用 `DialectResolver.resolve(dataSource)` 获取默认方言实例。
+
 ---
 
 ## 7. 模板语言：Text Block + 指令（@if/@for/...）

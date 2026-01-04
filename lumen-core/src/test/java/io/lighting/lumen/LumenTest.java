@@ -1,10 +1,5 @@
 package io.lighting.lumen;
 
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
-import io.lighting.lumen.sql.Dialect;
-import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
-import io.lighting.lumen.template.EntityNameResolvers;
-import java.util.Map;
 import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
@@ -18,23 +13,18 @@ class LumenTest {
     void buildsContextWithDefaults() {
         Lumen context = Lumen.builder()
             .dataSource(dataSource())
-            .dialect(dialect())
-            .metaRegistry(new ReflectionEntityMetaRegistry())
-            .entityNameResolver(EntityNameResolvers.from(Map.of()))
             .build();
 
         assertNotNull(context.db());
         assertNotNull(context.dsl());
         assertNotNull(context.renderer());
+        assertEquals("h2", context.dialect().id());
     }
 
     @Test
     void createsDaoFromGeneratedImpl() {
         Lumen context = Lumen.builder()
             .dataSource(dataSource())
-            .dialect(dialect())
-            .metaRegistry(new ReflectionEntityMetaRegistry())
-            .entityNameResolver(EntityNameResolvers.from(Map.of()))
             .build();
 
         ExampleDao dao = context.dao(ExampleDao.class);
@@ -49,9 +39,5 @@ class LumenTest {
         dataSource.setUser("sa");
         dataSource.setPassword("sa");
         return dataSource;
-    }
-
-    private static Dialect dialect() {
-        return new LimitOffsetDialect("\"");
     }
 }

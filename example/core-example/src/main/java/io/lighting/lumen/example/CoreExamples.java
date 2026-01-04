@@ -17,7 +17,6 @@ import io.lighting.lumen.template.EntityNameResolvers;
 import io.lighting.lumen.template.SqlTemplate;
 import io.lighting.lumen.template.TemplateContext;
 import java.util.List;
-import java.util.Map;
 
 public final class CoreExamples {
     private CoreExamples() {
@@ -72,11 +71,7 @@ public final class CoreExamples {
 
         EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
         Dialect dialect = exampleDialect();
-        EntityNameResolver resolver = EntityNameResolvers.from(Map.of(
-            "OrderRecord", OrderRecord.class,
-            "OrderItemRecord", OrderItemRecord.class,
-            "OrderModel", OrderModel.class
-        ));
+        EntityNameResolver resolver = EntityNameResolvers.auto();
         Bindings bindings = Bindings.of(
             "status", "NEW",
             "ids", List.of(10L, 20L),
@@ -108,6 +103,6 @@ public final class CoreExamples {
     }
 
     private static Dialect exampleDialect() {
-        return new LimitOffsetDialect("\"");
+        return new LimitOffsetDialect("ansi", "\"");
     }
 }

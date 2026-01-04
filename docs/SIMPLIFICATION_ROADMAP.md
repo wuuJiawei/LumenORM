@@ -16,7 +16,7 @@
 ## 当前痛点
 
 - 入口过多（ActiveRecord、Model、Db、模板、DSL），容易迷路。
-- 初始化成本高（Db、Dialect、MetaRegistry、EntityNameResolver、observers）。
+- 初始化成本高（Db、Dialect、MetaRegistry、EntityNameResolver、observers）；需要默认自动识别。
 - APT 看起来像“必需品”，不符合轻量路径。
 - 注解与模板包结构不统一。
 
@@ -25,9 +25,6 @@
 ```java
 Lumen lumen = Lumen.builder()
     .dataSource(dataSource)
-    .dialect(dialect)
-    .metaRegistry(new ReflectionEntityMetaRegistry())
-    .entityNameResolver(EntityNameResolvers.from(Map.of(...)))
     .build();
 
 OrderDao dao = lumen.dao(OrderDao.class);

@@ -17,12 +17,9 @@ snippets below are intended to be copy-paste friendly and map to the production 
 
 ```java
 DataSource dataSource = /* your pool */;
-Dialect dialect = new LimitOffsetDialect("\"");
+Dialect dialect = DialectResolver.resolve(dataSource);
 EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
-EntityNameResolver nameResolver = EntityNameResolvers.from(Map.of(
-    "OrderRecord", OrderRecord.class,
-    "OrderItemRecord", OrderItemRecord.class
-));
+EntityNameResolver nameResolver = EntityNameResolvers.auto();
 SqlRenderer renderer = new SqlRenderer(dialect);
 JdbcExecutor executor = new JdbcExecutor(dataSource);
 Db db = new DefaultDb(executor, renderer, dialect, metaRegistry, nameResolver);
@@ -44,16 +41,16 @@ Dsl dsl = lumen.dsl();
 ```java
 Lumen lumen = Lumen.builder()
     .dataSource(dataSource)
-    // 方言：分页语法与标识符引用规则（默认 ANSI 双引号；MySQL/Oracle 建议显式指定）
-    .dialect(new LimitOffsetDialect("\""))
+    // 方言：默认按 DataSource 自动识别，也可显式覆盖
+    .dialect(new LimitOffsetDialect("mysql", "`"))
     // 元数据：@Table/@Column/@Id 的映射来源
     .metaRegistry(new ReflectionEntityMetaRegistry())
-    // 模板解析：@table(OrderRecord) 这类短名的解析与映射
-    .entityNameResolver(EntityNameResolvers.from(Map.of(
+    // 模板解析：默认扫描 @Table 实体，可按需补充短名映射
+    .entityNameMappings(Map.of(
         "OrderRecord", OrderRecord.class,
         "OrderItemRecord", OrderItemRecord.class,
         "OrderModel", OrderModel.class
-    )))
+    ))
     .build();
 ```
 
@@ -195,8 +192,8 @@ List<OrderRow> rows = db.run(
 );
 ```
 
-说明：模板里使用 `@table(OrderRecord)` 这类短名时，需要在 `Lumen` 中配置
-`entityNameResolver` 进行短名映射。
+说明：默认会扫描 `@Table` 实体用于短名映射；若存在重名，可用全限定名或通过
+`entityNameMappings`/`addEntityNameMapping` 做补充。
 
 ## Db.run (Template at Runtime)
 
