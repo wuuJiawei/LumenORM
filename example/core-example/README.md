@@ -96,6 +96,55 @@ TemplateContext context = new TemplateContext(bindings.asMap(), dialect, metaReg
 RenderedSql rendered = template.render(context);
 ```
 
+## DAO Interface (SqlTemplate)
+
+```java
+public interface OrderDao {
+  @SqlTemplate("""
+    SELECT o.id, o.order_no, o.status
+    FROM @table(OrderRecord) o
+    WHERE o.id = :id
+  """)
+  List<OrderRow> findById(Long id, RowMapper<OrderRow> mapper) throws SQLException;
+
+  @SqlTemplate("""
+    SELECT o.id, o.order_no, o.status
+    FROM @table(OrderRecord) o
+    @where {
+      @if(filter != null && filter.status != null) { o.status = :filter.status }
+      @if(filter != null && filter.ids != null && !filter.ids.isEmpty()) {
+        AND o.id IN @in(:filter.ids)
+      }
+    }
+    @orderBy(:sort, allowed = { CREATED_DESC : o.id DESC, STATUS_ASC : o.status ASC }, default = CREATED_DESC)
+    @page(:page, :pageSize)
+  """)
+  List<OrderRow> search(
+      OrderFilter filter,
+      String sort,
+      int page,
+      int pageSize,
+      RowMapper<OrderRow> mapper
+  ) throws SQLException;
+
+  @SqlTemplate("""
+    UPDATE @table(OrderRecord)
+    SET status = :status
+    WHERE id = :id
+  """)
+  int updateStatus(Long id, String status) throws SQLException;
+}
+```
+
+```java
+OrderDao dao = new OrderDao_Impl(db, dialect, metaRegistry, nameResolver);
+OrderFilter filter = new OrderFilter(List.of(1L, 2L), "NEW");
+List<OrderRow> rows = dao.search(filter, "CREATED_DESC", 1, 20, mapper);
+```
+
+Note: `@table(OrderRecord)` resolves through `EntityNameResolver`, so map short names like
+`OrderRecord` to the entity class when building the DAO instance.
+
 ## Db.run (Template at Runtime)
 
 ```java
