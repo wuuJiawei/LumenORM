@@ -567,6 +567,138 @@ try (ResultStream<Row> stream = db.fetchStream(query, mapper, 500)) {
 }
 ```
 
+### 10.8 Active Record 模式（可选）
+
+提供两种风格，满足不同偏好：
+
+1. **MyBatis-Plus 风格**：`Model<T>`，方法返回 boolean，实例直接调用。
+2. **行数风格**：`ActiveRecord<T>`，方法返回影响行数，保留可观测性。
+
+配置入口（两种风格共用）：
+
+```java
+ActiveRecord.configure(ActiveRecordConfig.builder()
+    .db(db)
+    .renderer(renderer)
+    .metaRegistry(metaRegistry)
+    .filterLogicalDelete(true)
+    .build());
+```
+
+MyBatis-Plus 风格示例：
+
+```java
+@Table(name = "orders")
+class OrderRecord extends Model<OrderRecord> {
+  @Id(strategy = IdStrategy.AUTO)
+  private Long id;
+
+  @Column(name = "status")
+  private String status;
+
+  @LogicDelete(active = "0", deleted = "1")
+  private Integer deleted;
+}
+
+OrderRecord order = new OrderRecord();
+order.status = "NEW";
+order.insert();
+
+order.status = "PAID";
+order.updateById();
+
+OrderRecord loaded = order.selectById(order.id);
+List<OrderRecord> all = order.selectAll();
+
+order.deleteById(); // 若存在 @LogicDelete，自动走逻辑删除
+```
+
+DSL 风格链式查询/更新/删除示例：
+
+```java
+Model.of(OrderRecord.class)
+    .select(OrderRecord::status)
+    .where(OrderRecord::id).eq(1L)
+    .one();
+
+Model.of(OrderRecord.class)
+    .where(OrderRecord::status).eq("NEW")
+    .page(1, 10);
+
+Model.of(OrderRecord.class)
+    .set(OrderRecord::status, "PAID")
+    .where(OrderRecord::id).eq(1L)
+    .update();
+
+Model.of(OrderRecord.class)
+    .set(OrderRecord::status, "NEW")
+    .save();
+
+Model.of(OrderRecord.class)
+    .where(OrderRecord::id).eq(1L)
+    .remove();
+
+Model.of(OrderRecord.class)
+    .set(OrderRecord::id, 1L)
+    .removeById();
+```
+
+提示：
+
+* 统一使用 `Model.of(Entity.class)` 作为 ActiveQuery 入口，避免静态推断歧义。
+
+JOIN 示例（查询自身列 + 关联列）：
+
+```java
+ActiveQuery<OrderRecord> query = Model.of(OrderRecord.class);
+Table orders = query.table();
+Table items = query.table(OrderItemRecord.class).as("oi");
+
+List<OrderRecord> rows = query
+    .select(orders.col(OrderRecord::id), orders.col(OrderRecord::status), items.col("sku"))
+    .leftJoin(items).on(items.col("orderId").eq(orders.col(OrderRecord::id)))
+    .where(orders.col(OrderRecord::id)).eq(1L)
+    .objList();
+```
+
+行数风格示例：
+
+```java
+class OrderRecord extends ActiveRecord<OrderRecord> { ... }
+
+OrderRecord order = new OrderRecord();
+order.status = "NEW";
+int inserted = order.insert();
+```
+
+关联查询（简单外键关系，非 JOIN）：
+
+```java
+List<OrderItemRecord> items = order.hasMany(OrderItemRecord.class, OrderItemRecord::orderId);
+OrderItemRecord one = order.hasOne(OrderItemRecord.class, OrderItemRecord::orderId);
+OrderRecord parent = item.belongsTo(OrderRecord.class, OrderItemRecord::orderId, OrderRecord::id);
+```
+
+回调方法（可覆盖）：
+
+```java
+@Override protected void beforeInsert() {}
+@Override protected void afterInsert(int rows) {}
+@Override protected void beforeUpdate() {}
+@Override protected void afterUpdate(int rows) {}
+@Override protected void beforeDelete(boolean logical) {}
+@Override protected void afterDelete(int rows, boolean logical) {}
+@Override protected void beforeSave() {}
+@Override protected void afterSave(int rows) {}
+```
+
+说明：
+
+* Active Record 默认使用 `RowMappers.auto` 做映射，实体需有无参构造器；
+* 关联方法会触发额外查询，不会自动生成 JOIN；
+* `filterLogicalDelete(true)` 会在 `find/list` 中自动追加 `notDeleted()`。
+* `update()` / `remove()` 默认要求有 where 条件，避免误操作全表；如需全表更新/删除建议使用 DSL 直接构造语句。
+
 ---
 
 ## 11. 编译期检查与生成（APT）

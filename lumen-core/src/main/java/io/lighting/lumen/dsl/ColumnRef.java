@@ -44,24 +44,54 @@ public final class ColumnRef {
         return compare(Expr.Op.EQ, value);
     }
 
+    public Expr.Compare eq(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.EQ, other.expr());
+    }
+
     public Expr.Compare ne(Object value) {
         return compare(Expr.Op.NE, value);
+    }
+
+    public Expr.Compare ne(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.NE, other.expr());
     }
 
     public Expr.Compare gt(Object value) {
         return compare(Expr.Op.GT, value);
     }
 
+    public Expr.Compare gt(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.GT, other.expr());
+    }
+
     public Expr.Compare ge(Object value) {
         return compare(Expr.Op.GE, value);
+    }
+
+    public Expr.Compare ge(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.GE, other.expr());
     }
 
     public Expr.Compare lt(Object value) {
         return compare(Expr.Op.LT, value);
     }
 
+    public Expr.Compare lt(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.LT, other.expr());
+    }
+
     public Expr.Compare le(Object value) {
         return compare(Expr.Op.LE, value);
+    }
+
+    public Expr.Compare le(ColumnRef other) {
+        Objects.requireNonNull(other, "other");
+        return compare(Expr.Op.LE, other.expr());
     }
 
     public Expr.Compare isNull() {

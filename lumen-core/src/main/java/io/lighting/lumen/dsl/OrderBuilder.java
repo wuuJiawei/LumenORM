@@ -72,7 +72,7 @@ public final class OrderBuilder {
         return use(selection, null);
     }
 
-    List<OrderItem> build() {
+    public List<OrderItem> build() {
         if (!allowed.isEmpty()) {
             if (selected == null) {
                 throw new IllegalStateException("OrderBy whitelist requires use(...) to select an entry");
