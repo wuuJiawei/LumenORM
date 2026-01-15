@@ -15,3 +15,13 @@ spring:
       write-dates-as-timestamps: false
 server:
   port: 8080
+lumen:
+  sql:
+    log:
+      enabled: true
+      mode: INLINE
+      log-on-execute: true
+      include-elapsed: true
+      include-row-count: true
+      include-operation: true
+      prefix: "SQL:"
