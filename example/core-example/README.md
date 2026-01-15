@@ -144,23 +144,12 @@ List<OrderRow> rows = db.run(
 ## H2 Lambda DSL Example
 
 ```java
-Dsl dsl = lumen.dsl();
-Table orders = dsl.table(OrderRecord.class).as("o");
-
-List<OrderRow> rows = db.fetch(
-    Query.of(
-        dsl.select(
-                orders.col(OrderRecord::getId).as("id"),
-                orders.col(OrderRecord::getOrderNo).as("order_no"),
-                orders.col(OrderRecord::getStatus).as("status")
-            )
-            .from(orders)
-            .where(orders.col(OrderRecord::getStatus).eq(Dsl.param("status")))
-            .build(),
-        Bindings.of("status", "NEW")
-    ),
-    rs -> new OrderRow(rs.getLong("id"), rs.getString("order_no"), rs.getString("status"))
-);
+List<OrderRow> rows = db.dsl()
+    .select(OrderRow.class, OrderRecord::getId, OrderRecord::getOrderNo, OrderRecord::getStatus)
+    .from(OrderRecord.class)
+    .where()
+    .equals(OrderRecord::getStatus, "NEW")
+    .toList();
 ```
 
 ## Template SQL

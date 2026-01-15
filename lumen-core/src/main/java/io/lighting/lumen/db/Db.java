@@ -4,6 +4,7 @@ import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.jdbc.ResultStream;
 import io.lighting.lumen.jdbc.GeneratedKeyMapper;
 import io.lighting.lumen.jdbc.RowMappers;
+import io.lighting.lumen.dsl.DbDsl;
 import io.lighting.lumen.sql.BatchSql;
 import io.lighting.lumen.sql.Bindings;
 import java.sql.SQLException;
@@ -36,4 +37,8 @@ public interface Db {
 
     <T> T executeAndReturnGeneratedKey(Command command, String columnLabel, GeneratedKeyMapper<T> mapper)
         throws SQLException;
+
+    default DbDsl dsl() {
+        throw new UnsupportedOperationException("Db DSL is not available for this implementation");
+    }
 }

@@ -10,6 +10,7 @@ import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.SqlRenderer;
+import io.lighting.lumen.dsl.DbDsl;
 import io.lighting.lumen.template.EntityNameResolver;
 import io.lighting.lumen.template.SqlTemplate;
 import io.lighting.lumen.template.TemplateContext;
@@ -25,6 +26,7 @@ public final class DefaultDb implements Db {
     private final EntityMetaRegistry metaRegistry;
     private final EntityNameResolver entityNameResolver;
     private final List<DbObserver> observers;
+    private volatile DbDsl dsl;
 
     public DefaultDb(
         JdbcExecutor executor,
@@ -142,6 +144,20 @@ public final class DefaultDb implements Db {
             }
         );
         return executeFetch(DbOperation.TEMPLATE, sqlText, rendered, mapper);
+    }
+
+    @Override
+    public DbDsl dsl() {
+        DbDsl current = dsl;
+        if (current == null) {
+            synchronized (this) {
+                if (dsl == null) {
+                    dsl = new DbDsl(this, metaRegistry);
+                }
+                current = dsl;
+            }
+        }
+        return current;
     }
 
     private <T> List<T> executeFetch(
