@@ -15,5 +15,6 @@
 
     <modules>
         <module>core-example</module>
+        <module>todo-example</module>
     </modules>
 </project>

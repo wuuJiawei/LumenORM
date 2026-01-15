@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Todo Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Space+Grotesk:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --ink: #0b0b10;
+            --muted: #5b5f6b;
+            --card: #ffffff;
+            --accent: #d96b2f;
+            --accent-soft: rgba(217, 107, 47, 0.16);
+            --line: rgba(15, 15, 30, 0.12);
+            --bg-top: #f8f3ea;
+            --bg-bottom: #f1f5f2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(1200px 800px at 10% -10%, #f7e8d4 0%, transparent 60%),
+                        radial-gradient(900px 600px at 90% 10%, #f4edd8 0%, transparent 55%),
+                        linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 48px 24px 24px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-family: "Playfair Display", serif;
+            font-size: clamp(2rem, 4vw, 3rem);
+            margin: 0 0 12px;
+        }
+
+        header p {
+            margin: 0 auto;
+            max-width: 560px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+            gap: 24px;
+            padding: 24px;
+            max-width: 1100px;
+            margin: 0 auto 64px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid var(--line);
+            box-shadow: 0 24px 40px rgba(9, 9, 14, 0.08);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input, textarea, select {
+            font: inherit;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: #fff;
+        }
+
+        textarea {
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        button {
+            font: inherit;
+            border: none;
+            border-radius: 999px;
+            padding: 10px 18px;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        button.primary {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 12px 20px rgba(217, 107, 47, 0.25);
+        }
+
+        button.ghost {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .status {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .todo {
+            border-radius: 18px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            background: #fffaf3;
+            display: grid;
+            gap: 10px;
+        }
+
+        .todo.completed {
+            background: #f2f6f2;
+        }
+
+        .todo h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .todo p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .todo-meta {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .todo-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #fff;
+            border: 1px solid var(--line);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 900px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Todo Board</h1>
+    <p>Simple Lumen + Spring Boot UI for creating, tracking, and finishing tasks.</p>
+</header>
+<main>
+    <section class="card">
+        <h2>Create or edit</h2>
+        <form id="todo-form">
+            <div class="form-group">
+                <label for="title">Title</label>
+                <input id="title" name="title" placeholder="Ship docs" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" placeholder="Notes"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="completed">Completed</label>
+                <select id="completed" name="completed">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div class="actions">
+                <button class="primary" type="submit" id="submit-btn">Create</button>
+                <button class="ghost" type="button" id="cancel-btn" hidden>Cancel</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="toolbar">
+            <div>
+                <h2 style="margin:0">Todos</h2>
+                <div class="status" id="status">Loading...</div>
+            </div>
+            <div class="actions">
+                <select id="filter">
+                    <option value="all">All</option>
+                    <option value="open">Open</option>
+                    <option value="done">Done</option>
+                </select>
+                <select id="pageSize">
+                    <option value="5">5 / page</option>
+                    <option value="10" selected>10 / page</option>
+                    <option value="20">20 / page</option>
+                </select>
+            </div>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="pagination">
+            <button class="ghost" id="prev">Prev</button>
+            <div class="status" id="page-info"></div>
+            <button class="ghost" id="next">Next</button>
+        </div>
+    </section>
+</main>
+
+<script>
+    const state = {
+        page: 1,
+        pageSize: 10,
+        completed: null,
+        editingId: null
+    };
+
+    const form = document.getElementById("todo-form");
+    const submitBtn = document.getElementById("submit-btn");
+    const cancelBtn = document.getElementById("cancel-btn");
+    const listEl = document.getElementById("list");
+    const statusEl = document.getElementById("status");
+    const pageInfoEl = document.getElementById("page-info");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+    const filterEl = document.getElementById("filter");
+    const pageSizeEl = document.getElementById("pageSize");
+
+    async function fetchTodos() {
+        statusEl.textContent = "Loading...";
+        const params = new URLSearchParams();
+        params.set("page", state.page.toString());
+        params.set("pageSize", state.pageSize.toString());
+        if (state.completed !== null) {
+            params.set("completed", state.completed.toString());
+        }
+        const response = await fetch(`/todos?${params}`);
+        const data = await response.json();
+        renderList(data);
+    }
+
+    function renderList(data) {
+        listEl.innerHTML = "";
+        if (!data.items || data.items.length === 0) {
+            listEl.innerHTML = "<div class=\"status\">No todos yet. Add one on the left.</div>";
+        } else {
+            data.items.forEach(todo => {
+                const card = document.createElement("div");
+                card.className = `todo ${todo.completed ? "completed" : ""}`;
+                card.innerHTML = `
+                    <div class=\"todo-meta\">
+                        <span class=\"pill\">${todo.completed ? "done" : "open"}</span>
+                        <span>Updated ${formatDate(todo.updatedAt)}</span>
+                    </div>
+                    <h3>${escapeHtml(todo.title)}</h3>
+                    <p>${todo.description ? escapeHtml(todo.description) : "No description"}</p>
+                    <div class=\"todo-actions\">
+                        <button class=\"ghost\" data-action=\"toggle\">${todo.completed ? "Reopen" : "Complete"}</button>
+                        <button class=\"ghost\" data-action=\"edit\">Edit</button>
+                        <button class=\"ghost\" data-action=\"delete\">Delete</button>
+                    </div>
+                `;
+                card.querySelectorAll("button").forEach(btn => {
+                    btn.addEventListener("click", () => handleAction(btn.dataset.action, todo));
+                });
+                listEl.appendChild(card);
+            });
+        }
+        const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+        statusEl.textContent = `${data.total} total`;
+        pageInfoEl.textContent = `Page ${data.page} / ${totalPages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= totalPages;
+    }
+
+    async function handleAction(action, todo) {
+        if (action === "delete") {
+            await fetch(`/todos/${todo.id}`, { method: "DELETE" });
+            await refresh();
+            return;
+        }
+        if (action === "toggle") {
+            await saveTodo(todo.id, {
+                title: todo.title,
+                description: todo.description,
+                completed: !todo.completed
+            });
+            await refresh();
+            return;
+        }
+        if (action === "edit") {
+            startEdit(todo);
+        }
+    }
+
+    function startEdit(todo) {
+        state.editingId = todo.id;
+        form.title.value = todo.title;
+        form.description.value = todo.description || "";
+        form.completed.value = todo.completed ? "true" : "false";
+        submitBtn.textContent = "Update";
+        cancelBtn.hidden = false;
+    }
+
+    function resetForm() {
+        state.editingId = null;
+        form.reset();
+        form.completed.value = "false";
+        submitBtn.textContent = "Create";
+        cancelBtn.hidden = true;
+    }
+
+    async function saveTodo(id, payload) {
+        const options = {
+            method: id ? "PUT" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        };
+        const url = id ? `/todos/${id}` : "/todos";
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.message || "Request failed");
+        }
+    }
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const payload = {
+            title: form.title.value.trim(),
+            description: form.description.value.trim() || null,
+            completed: form.completed.value === "true"
+        };
+        await saveTodo(state.editingId, payload);
+        resetForm();
+        await refresh();
+    });
+
+    cancelBtn.addEventListener("click", () => {
+        resetForm();
+    });
+
+    filterEl.addEventListener("change", () => {
+        state.page = 1;
+        if (filterEl.value === "all") {
+            state.completed = null;
+        } else {
+            state.completed = filterEl.value === "done";
+        }
+        fetchTodos();
+    });
+
+    pageSizeEl.addEventListener("change", () => {
+        state.page = 1;
+        state.pageSize = Number(pageSizeEl.value);
+        fetchTodos();
+    });
+
+    prevBtn.addEventListener("click", () => {
+        state.page = Math.max(1, state.page - 1);
+        fetchTodos();
+    });
+
+    nextBtn.addEventListener("click", () => {
+        state.page += 1;
+        fetchTodos();
+    });
+
+    function formatDate(value) {
+        if (!value) {
+            return "";
+        }
+        const date = new Date(value);
+        return date.toLocaleString();
+    }
+
+    function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, match => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#039;"
+        }[match]));
+    }
+
+    async function refresh() {
+        await fetchTodos();
+    }
+
+    resetForm();
+    fetchTodos();
+</script>
+</body>
+</html>
