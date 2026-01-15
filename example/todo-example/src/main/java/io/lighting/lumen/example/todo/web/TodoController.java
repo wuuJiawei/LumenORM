@@ -57,8 +57,9 @@ public class TodoController {
     public PageResponse<TodoResponse> list(
         @RequestParam(name = "page", defaultValue = "1") int page,
         @RequestParam(name = "pageSize", defaultValue = "20") int pageSize,
-        @RequestParam(name = "completed", required = false) Boolean completed
+        @RequestParam(name = "completed", required = false) Boolean completed,
+        @RequestParam(name = "sort", required = false) java.util.List<String> sort
     ) {
-        return service.list(page, pageSize, completed);
+        return service.list(page, pageSize, completed, sort);
     }
 }

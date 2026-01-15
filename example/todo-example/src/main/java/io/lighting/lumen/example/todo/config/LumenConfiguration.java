@@ -2,6 +2,7 @@ package io.lighting.lumen.example.todo.config;
 
 import io.lighting.lumen.Lumen;
 import io.lighting.lumen.db.Db;
+import io.lighting.lumen.example.todo.repo.TodoQueryDao;
 import javax.sql.DataSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,5 +19,10 @@ public class LumenConfiguration {
     @Bean
     public Db db(Lumen lumen) {
         return lumen.db();
+    }
+
+    @Bean
+    public TodoQueryDao todoQueryDao(Lumen lumen) {
+        return lumen.dao(TodoQueryDao.class);
     }
 }

@@ -95,7 +95,14 @@ public final class Lumen {
             );
             return ctor.newInstance(db, dialect, metaRegistry, entityNameResolver);
         } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("DAO implementation not found: " + implName, ex);
+            // Fallback to runtime SQL template proxy when no APT-generated implementation exists.
+            return io.lighting.lumen.template.SqlTemplateProxyFactory.create(
+                daoType,
+                db,
+                dialect,
+                metaRegistry,
+                entityNameResolver
+            );
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to create DAO implementation: " + implName, ex);
         }

@@ -1,6 +1,9 @@
 package io.lighting.lumen.template;
 
 import io.lighting.lumen.meta.IdentifierMacros;
+import io.lighting.lumen.page.Sort;
+import io.lighting.lumen.page.SortDirection;
+import io.lighting.lumen.page.SortItem;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.RenderedPagination;
 import io.lighting.lumen.sql.RenderedSql;
@@ -206,27 +209,42 @@ final class SqlTemplateRenderer {
         StringBuilder sql,
         List<Bind> binds
     ) {
-        String selection = resolveOrderKey(orderByNode.selection().evaluate(context));
-        if (selection == null) {
-            selection = orderByNode.defaultKey();
+        List<OrderSelection> selections = resolveOrderSelections(orderByNode.selection().evaluate(context));
+        if (selections == null || selections.isEmpty()) {
+            String fallback = orderByNode.defaultKey();
+            if (fallback == null) {
+                return;
+            }
+            selections = List.of(new OrderSelection(fallback, null));
         }
-        if (selection == null) {
+        List<String> fragments = new ArrayList<>();
+        for (OrderSelection selection : selections) {
+            String key = selection.key();
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            List<TemplateNode> allowedNodes = orderByNode.allowed().get(key);
+            if (allowedNodes == null) {
+                throw new IllegalArgumentException("@orderBy selection not allowed: " + key);
+            }
+            RenderedSql fragment = renderToSql(allowedNodes, context);
+            if (!fragment.binds().isEmpty()) {
+                throw new IllegalArgumentException("@orderBy fragments must not use parameters");
+            }
+            String trimmed = stripOrderByPrefix(fragment.sql().trim());
+            if (trimmed.isBlank()) {
+                continue;
+            }
+            SortDirection direction = selection.direction();
+            if (direction != null && !hasTrailingDirection(trimmed)) {
+                trimmed = trimmed + " " + direction.name();
+            }
+            fragments.add(trimmed);
+        }
+        if (fragments.isEmpty()) {
             return;
         }
-        List<TemplateNode> allowedNodes = orderByNode.allowed().get(selection);
-        if (allowedNodes == null) {
-            throw new IllegalArgumentException("@orderBy selection not allowed: " + selection);
-        }
-        RenderedSql fragment = renderToSql(allowedNodes, context);
-        if (!fragment.binds().isEmpty()) {
-            throw new IllegalArgumentException("@orderBy fragments must not use parameters");
-        }
-        String trimmed = stripOrderByPrefix(fragment.sql().trim());
-        if (trimmed.isBlank()) {
-            return;
-        }
-        appendSql(sql, " ORDER BY " + trimmed);
-        binds.addAll(fragment.binds());
+        appendSql(sql, " ORDER BY " + String.join(", ", fragments));
     }
 
     private RenderedSql renderToSql(List<TemplateNode> nodes, TemplateContext context) {
@@ -290,6 +308,58 @@ final class SqlTemplateRenderer {
         return trimmed;
     }
 
+    private List<OrderSelection> resolveOrderSelections(Object value) {
+        if (value == null) {
+            return null;
+        }
+        List<OrderSelection> selections = new ArrayList<>();
+        if (value instanceof Sort sort) {
+            for (SortItem item : sort.items()) {
+                selections.add(new OrderSelection(item.key(), item.direction()));
+            }
+            return selections;
+        }
+        if (value instanceof SortItem item) {
+            selections.add(new OrderSelection(item.key(), item.direction()));
+            return selections;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                addSelection(selections, item);
+            }
+            return selections;
+        }
+        if (value.getClass().isArray()) {
+            int length = Array.getLength(value);
+            for (int i = 0; i < length; i++) {
+                addSelection(selections, Array.get(value, i));
+            }
+            return selections;
+        }
+        addSelection(selections, value);
+        return selections;
+    }
+
+    private void addSelection(List<OrderSelection> selections, Object value) {
+        if (value == null) {
+            return;
+        }
+        if (value instanceof Sort sort) {
+            for (SortItem item : sort.items()) {
+                selections.add(new OrderSelection(item.key(), item.direction()));
+            }
+            return;
+        }
+        if (value instanceof SortItem item) {
+            selections.add(new OrderSelection(item.key(), item.direction()));
+            return;
+        }
+        String key = resolveOrderKey(value);
+        if (key != null) {
+            selections.add(new OrderSelection(key, null));
+        }
+    }
+
     private String resolveOrderKey(Object value) {
         if (value == null) {
             return null;
@@ -304,6 +374,16 @@ final class SqlTemplateRenderer {
         return value.toString();
     }
 
+    private boolean hasTrailingDirection(String fragment) {
+        String trimmed = fragment.trim();
+        int lastSpace = trimmed.lastIndexOf(' ');
+        if (lastSpace < 0) {
+            return false;
+        }
+        String suffix = trimmed.substring(lastSpace + 1).toUpperCase();
+        return "ASC".equals(suffix) || "DESC".equals(suffix);
+    }
+
     private String stripKeyword(String trimmed, int keywordLength) {
         if (trimmed.length() == keywordLength) {
             return "";
@@ -313,6 +393,9 @@ final class SqlTemplateRenderer {
             return trimmed.substring(keywordLength + 1).trim();
         }
         return trimmed;
+    }
+
+    private record OrderSelection(String key, SortDirection direction) {
     }
 
     private void appendSql(StringBuilder sql, String fragment) {
