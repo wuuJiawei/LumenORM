@@ -11,6 +11,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.List;
+
 @Configuration
 @EnableConfigurationProperties(LumenSqlLogProperties.class)
 public class LumenConfiguration {
@@ -18,10 +20,9 @@ public class LumenConfiguration {
 
     @Bean
     public Lumen lumen(DataSource dataSource, LumenSqlLogProperties sqlLogProperties) {
-        SqlLog sqlLog = null;
-        if (sqlLogProperties.isEnabled()) {
-            sqlLog = SqlLog.builder()
+        SqlLog sqlLog = SqlLog.builder()
                 .mode(sqlLogProperties.getMode())
+                .enabled(sqlLogProperties.isEnabled())
                 .logOnRender(sqlLogProperties.isLogOnRender())
                 .logOnExecute(sqlLogProperties.isLogOnExecute())
                 .includeElapsed(sqlLogProperties.isIncludeElapsed())
@@ -30,10 +31,9 @@ public class LumenConfiguration {
                 .prefix(sqlLogProperties.getPrefix())
                 .sink(LOGGER::info)
                 .build();
-        }
         return Lumen.builder()
             .dataSource(dataSource)
-            .observers(sqlLog == null ? java.util.List.of() : java.util.List.of(sqlLog))
+            .observers(List.of(sqlLog))
             .build();
     }
 
