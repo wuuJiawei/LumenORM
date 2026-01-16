@@ -56,6 +56,10 @@ class SqlTemplateProxyFactoryTest {
         assertEquals("beta", sorted.items().get(0).name());
         assertEquals(2L, sorted.total());
 
+        PageResult<Item> noCount = dao.pageAuto(PageRequest.of(1, 1, Sort.desc("name")).withoutCount());
+        assertEquals(1, noCount.items().size());
+        assertEquals(PageResult.TOTAL_UNKNOWN, noCount.total());
+
         assertEquals(2L, dao.countAll());
         assertEquals(2, dao.countAllInt());
 

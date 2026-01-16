@@ -1,12 +1,13 @@
 package io.lighting.lumen.db;
 
+import io.lighting.lumen.page.PageSql;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.SqlRenderer;
 import io.lighting.lumen.sql.ast.Stmt;
 import java.util.Objects;
 
-public sealed interface Query permits AstQuery, RenderedQuery {
+public sealed interface Query permits AstQuery, RenderedQuery, CountQuery {
     RenderedSql render(SqlRenderer renderer);
 
     static Query of(Stmt stmt, Bindings bindings) {
@@ -15,6 +16,10 @@ public sealed interface Query permits AstQuery, RenderedQuery {
 
     static Query of(RenderedSql renderedSql) {
         return new RenderedQuery(renderedSql);
+    }
+
+    static Query count(Query source) {
+        return new CountQuery(source);
     }
 }
 
@@ -44,5 +49,19 @@ final class RenderedQuery implements Query {
     @Override
     public RenderedSql render(SqlRenderer renderer) {
         return renderedSql;
+    }
+}
+
+final class CountQuery implements Query {
+    private final Query source;
+
+    CountQuery(Query source) {
+        this.source = Objects.requireNonNull(source, "source");
+    }
+
+    @Override
+    public RenderedSql render(SqlRenderer renderer) {
+        RenderedSql base = source.render(renderer);
+        return PageSql.wrapCount(base);
     }
 }

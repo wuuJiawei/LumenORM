@@ -8,6 +8,7 @@ import io.lighting.lumen.jdbc.RowMappers;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.page.PageRequest;
 import io.lighting.lumen.page.PageResult;
+import io.lighting.lumen.page.PageSql;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.RenderedPagination;
@@ -273,7 +274,9 @@ public final class SqlTemplateProxyFactory {
                         ? applyPagination(rendered, values, dialect)
                         : rendered;
                     List<Object> items = fetchList(db, paged, args);
-                    long total = fetchCount(db, renderCount(bindings, dialect, metaRegistry, entityNameResolver));
+                    long total = values.searchCount()
+                        ? fetchCount(db, renderCount(bindings, dialect, metaRegistry, entityNameResolver))
+                        : PageResult.TOTAL_UNKNOWN;
                     return new PageResult<>(items, values.page(), values.pageSize(), total);
                 }
                 case INT -> {
@@ -360,26 +363,19 @@ public final class SqlTemplateProxyFactory {
                 entityNameResolver
             );
             RenderedSql base = template.render(countContext);
-            String sql = wrapCountSql(base.sql());
-            return new RenderedSql(sql, base.binds());
-        }
-
-        private String wrapCountSql(String sql) {
-            String trimmed = sql == null ? "" : sql.trim();
-            if (trimmed.endsWith(";")) {
-                trimmed = trimmed.substring(0, trimmed.length() - 1);
-            }
-            return "SELECT COUNT(*) FROM (" + trimmed + ") AS count_src";
+            return PageSql.wrapCount(base);
         }
 
         private PageValues resolvePageValues(TemplateContext context, Object[] args) {
+            PageValues paramValues = pageParam == null ? null : pageParam.extract(args);
             if (pageExpression != null) {
                 int page = toInt(pageExpression.page().evaluate(context), "page");
                 int pageSize = toInt(pageExpression.pageSize().evaluate(context), "pageSize");
-                return new PageValues(page, pageSize);
+                boolean searchCount = paramValues == null || paramValues.searchCount();
+                return new PageValues(page, pageSize, searchCount);
             }
-            if (pageParam != null) {
-                return pageParam.extract(args);
+            if (paramValues != null) {
+                return paramValues;
             }
             throw new IllegalStateException("@page is required for PageResult return types");
         }
@@ -625,7 +621,7 @@ public final class SqlTemplateProxyFactory {
         private record PageExpression(TemplateExpression page, TemplateExpression pageSize) {
         }
 
-        private record PageValues(int page, int pageSize) {
+        private record PageValues(int page, int pageSize, boolean searchCount) {
         }
 
         private enum PageParamKind {
@@ -641,11 +637,11 @@ public final class SqlTemplateProxyFactory {
                 }
                 if (kind == PageParamKind.REQUEST) {
                     PageRequest request = (PageRequest) value;
-                    return new PageValues(request.page(), request.pageSize());
+                    return new PageValues(request.page(), request.pageSize(), request.searchCount());
                 }
                 if (kind == PageParamKind.ACTIVE) {
                     io.lighting.lumen.active.Page page = (io.lighting.lumen.active.Page) value;
-                    return new PageValues(page.page(), page.pageSize());
+                    return new PageValues(page.page(), page.pageSize(), true);
                 }
                 throw new IllegalStateException("Unsupported page parameter kind: " + kind);
             }

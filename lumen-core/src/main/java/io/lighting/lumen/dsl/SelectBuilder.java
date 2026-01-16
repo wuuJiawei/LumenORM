@@ -1,5 +1,6 @@
 package io.lighting.lumen.dsl;
 
+import io.lighting.lumen.page.PageRequest;
 import io.lighting.lumen.sql.ast.Expr;
 import io.lighting.lumen.sql.ast.Join;
 import io.lighting.lumen.sql.ast.JoinType;
@@ -108,6 +109,11 @@ public final class SelectBuilder {
         public FromBuilder page(int page, int pageSize) {
             this.paging = new Paging(page, pageSize);
             return this;
+        }
+
+        public FromBuilder page(PageRequest pageRequest) {
+            Objects.requireNonNull(pageRequest, "pageRequest");
+            return page(pageRequest.page(), pageRequest.pageSize());
         }
 
         public SelectStmt build() {

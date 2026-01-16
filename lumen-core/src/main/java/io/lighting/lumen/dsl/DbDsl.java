@@ -6,6 +6,8 @@ import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.jdbc.RowMappers;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
+import io.lighting.lumen.page.PageRequest;
+import io.lighting.lumen.page.PageResult;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.ast.Expr;
 import io.lighting.lumen.sql.ast.OrderItem;
@@ -201,6 +203,17 @@ public final class DbDsl {
         }
 
         /**
+         * 设置分页参数（使用 PageRequest）。
+         *
+         * @param pageRequest 分页请求
+         * @return 当前步骤对象
+         */
+        public FromStep<T, E> page(PageRequest pageRequest) {
+            Objects.requireNonNull(pageRequest, "pageRequest");
+            return page(pageRequest.page(), pageRequest.pageSize());
+        }
+
+        /**
          * 执行查询并返回结果列表，使用自动行映射器。
          *
          * @return 结果列表
@@ -221,6 +234,36 @@ public final class DbDsl {
             Objects.requireNonNull(mapper, "mapper");
             SelectStmt stmt = buildStmt();
             return db.fetch(Query.of(stmt, Bindings.empty()), mapper);
+        }
+
+        /**
+         * 执行分页查询并返回 PageResult，使用自动行映射器。
+         *
+         * @param pageRequest 分页请求
+         * @return 分页结果
+         * @throws SQLException 数据库访问异常
+         */
+        public PageResult<T> toPage(PageRequest pageRequest) throws SQLException {
+            return toPage(pageRequest, RowMappers.auto(resultType));
+        }
+
+        /**
+         * 执行分页查询并返回 PageResult，使用自定义行映射器。
+         *
+         * @param pageRequest 分页请求
+         * @param mapper      行映射器
+         * @return 分页结果
+         * @throws SQLException 数据库访问异常
+         */
+        public PageResult<T> toPage(PageRequest pageRequest, RowMapper<T> mapper) throws SQLException {
+            Objects.requireNonNull(pageRequest, "pageRequest");
+            Objects.requireNonNull(mapper, "mapper");
+            page(pageRequest.page(), pageRequest.pageSize());
+            Query pageQuery = Query.of(buildStmt(), Bindings.empty());
+            Query countQuery = pageRequest.searchCount()
+                ? Query.count(Query.of(buildStmt(null), Bindings.empty()))
+                : null;
+            return db.page(pageQuery, countQuery, pageRequest, mapper);
         }
 
         /**
@@ -258,6 +301,10 @@ public final class DbDsl {
          * @return select 语句
          */
         private SelectStmt buildStmt() {
+            return buildStmt(paging);
+        }
+
+        private SelectStmt buildStmt(Paging pagingOverride) {
             return new SelectStmt(
                 selectItems,
                 table.ref(),
@@ -266,9 +313,10 @@ public final class DbDsl {
                 List.of(),
                 null,
                 List.copyOf(orderBy),
-                paging
+                pagingOverride
             );
         }
+
     }
 
     /**
@@ -311,6 +359,31 @@ public final class DbDsl {
         public List<T> toList(RowMapper<T> mapper) throws SQLException {
             parent.setWhere(build());
             return parent.toList(mapper);
+        }
+
+        /**
+         * 生成 where 条件并执行分页查询，使用自动行映射器。
+         *
+         * @param pageRequest 分页请求
+         * @return 分页结果
+         * @throws SQLException 数据库访问异常
+         */
+        public PageResult<T> toPage(PageRequest pageRequest) throws SQLException {
+            parent.setWhere(build());
+            return parent.toPage(pageRequest);
+        }
+
+        /**
+         * 生成 where 条件并执行分页查询，使用自定义行映射器。
+         *
+         * @param pageRequest 分页请求
+         * @param mapper      行映射器
+         * @return 分页结果
+         * @throws SQLException 数据库访问异常
+         */
+        public PageResult<T> toPage(PageRequest pageRequest, RowMapper<T> mapper) throws SQLException {
+            parent.setWhere(build());
+            return parent.toPage(pageRequest, mapper);
         }
 
         @Override
