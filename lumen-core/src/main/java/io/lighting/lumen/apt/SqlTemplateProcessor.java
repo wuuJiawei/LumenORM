@@ -4,8 +4,6 @@ import io.lighting.lumen.template.annotations.SqlConst;
 import io.lighting.lumen.template.annotations.SqlTemplate;
 import io.lighting.lumen.template.SqlTemplateAnalysis;
 import io.lighting.lumen.template.SqlTemplateAnalyzer;
-import java.io.IOException;
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -13,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Filer;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
@@ -29,16 +26,32 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 
+/**
+ * SQL 模板注解处理器。
+ * <p>
+ * 该处理器负责：
+ * <ul>
+ *   <li>校验 {@link SqlTemplate} 的使用位置与方法签名。</li>
+ *   <li>在编译期解析 SQL 模板并检查绑定参数。</li>
+ *   <li>生成模板常量类（_SqlTemplates）与实现类（_Impl）。</li>
+ *   <li>校验 {@link SqlConst} 标注的常量模板。</li>
+ * </ul>
+ */
 @SupportedAnnotationTypes({
     "io.lighting.lumen.template.annotations.SqlTemplate",
     "io.lighting.lumen.template.annotations.SqlConst"
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class SqlTemplateProcessor extends AbstractProcessor {
+    /**
+     * 系统预留绑定名，供框架注入方言标识。
+     */
     private static final String SYSTEM_DIALECT_BINDING = "__dialect";
 
+    /**
+     * 处理入口：校验模板注解并生成相关类。
+     */
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (roundEnv.processingOver()) {
@@ -57,6 +70,11 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 处理 @SqlTemplate 标注的方法。
+     * <p>
+     * 验证方法签名、模板语法与绑定参数，并按接口归类。
+     */
     private boolean processSqlTemplates(
         RoundEnvironment roundEnv,
         Map<TypeElement, List<ExecutableElement>> methodsByType
@@ -78,6 +96,11 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                 continue;
             }
             SqlTemplate annotation = method.getAnnotation(SqlTemplate.class);
+            if (annotation == null) {
+                error(method, "Missing @SqlTemplate annotation");
+                hasErrors = true;
+                continue;
+            }
             String template = annotation.value();
             if (!validateTemplate(method, template)) {
                 hasErrors = true;
@@ -93,6 +116,11 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return hasErrors;
     }
 
+    /**
+     * 处理 @SqlConst 标注的模板常量。
+     * <p>
+     * 仅允许 static final 字段或 final 局部变量，并要求为编译期常量字符串。
+     */
     private boolean processSqlConst(RoundEnvironment roundEnv) {
         boolean hasErrors = false;
         for (Element element : roundEnv.getElementsAnnotatedWith(SqlConst.class)) {
@@ -133,54 +161,82 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return hasErrors;
     }
 
+    /**
+     * 生成模板常量类与实现类。
+     */
     private void generateTemplateOutputs(TypeElement type, List<ExecutableElement> methods) {
         List<TemplateMethod> templateMethods = buildTemplateMethods(methods);
         generateTemplateClass(type, templateMethods);
         generateImplClass(type, templateMethods);
     }
 
+    /**
+     * 为方法分配唯一常量名，并收集模板信息。
+     */
     private List<TemplateMethod> buildTemplateMethods(List<ExecutableElement> methods) {
         List<TemplateMethod> result = new ArrayList<>();
         Set<String> usedNames = new HashSet<>();
         for (ExecutableElement method : methods) {
             SqlTemplate annotation = method.getAnnotation(SqlTemplate.class);
+            if (annotation == null) {
+                error(method, "Missing @SqlTemplate annotation");
+                continue;
+            }
             String template = annotation.value();
-            String baseName = toConstantName(method.getSimpleName().toString());
+            String baseName = AptCodegenUtils.toConstantName(method.getSimpleName().toString());
             String constantName = uniqueConstantName(baseName, usedNames);
             result.add(new TemplateMethod(method, constantName, template));
         }
         return result;
     }
 
+    /**
+     * 生成 _SqlTemplates 常量类。
+     * <p>
+     * 每个方法对应一个模板常量与解析后的模板对象。
+     */
     private void generateTemplateClass(TypeElement type, List<TemplateMethod> methods) {
         String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
         String simpleName = type.getSimpleName().toString() + "_SqlTemplates";
         String qualifiedName = packageName.isEmpty() ? simpleName : packageName + "." + simpleName;
-        Filer filer = processingEnv.getFiler();
-        try {
-            JavaFileObject sourceFile = filer.createSourceFile(qualifiedName, type);
-            try (Writer writer = sourceFile.openWriter()) {
-                if (!packageName.isEmpty()) {
-                    writer.write("package " + packageName + ";\n\n");
+        StringBuilder content = new StringBuilder();
+        content.append(AptCodegenUtils.packageLine(packageName));
+        content.append("""
+            @SuppressWarnings("unused")
+            public final class %s {
+                private %s() {
                 }
-                writer.write("public final class " + simpleName + " {\n");
-                writer.write("    private " + simpleName + "() {\n");
-                writer.write("    }\n\n");
-                for (TemplateMethod method : methods) {
-                    writer.write("    public static final String " + method.constantName() + " = \""
-                        + escapeJava(method.template()) + "\";\n");
-                    writer.write("    public static final io.lighting.lumen.template.SqlTemplate "
-                        + method.constantName() + "_TEMPLATE = io.lighting.lumen.template.SqlTemplate.parse("
-                        + method.constantName() + ");\n\n");
-                }
-                writer.write("}\n");
-            }
-        } catch (IOException ex) {
-            processingEnv.getMessager()
-                .printMessage(Diagnostic.Kind.ERROR, "Failed to generate template class: " + ex.getMessage(), type);
+
+            """.formatted(simpleName, simpleName));
+        for (TemplateMethod method : methods) {
+            content.append("""
+                    public static final String %s = "%s";
+                    public static final io.lighting.lumen.template.SqlTemplate %s_TEMPLATE =
+                        io.lighting.lumen.template.SqlTemplate.parse(%s);
+
+                """.formatted(
+                method.constantName(),
+                AptCodegenUtils.escapeJava(method.template()),
+                method.constantName(),
+                method.constantName()
+            ));
         }
+        content.append("}\n");
+        AptCodegenUtils.writeSourceFile(
+            processingEnv.getFiler(),
+            processingEnv.getMessager(),
+            type,
+            qualifiedName,
+            content.toString(),
+            "Failed to generate template class: "
+        );
     }
 
+    /**
+     * 生成 Mapper 的实现类（_Impl）。
+     * <p>
+     * 实现类会在方法内完成模板渲染与执行逻辑拼装。
+     */
     private void generateImplClass(TypeElement type, List<TemplateMethod> methods) {
         String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
         String simpleName = type.getSimpleName().toString() + "_Impl";
@@ -188,73 +244,86 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         String typeParamsDecl = renderTypeParameters(type.getTypeParameters());
         String typeParamsUse = renderTypeParameterUse(type.getTypeParameters());
         String targetType = type.getQualifiedName().toString() + typeParamsUse;
-        Filer filer = processingEnv.getFiler();
-        try {
-            JavaFileObject sourceFile = filer.createSourceFile(qualifiedName, type);
-            try (Writer writer = sourceFile.openWriter()) {
-                if (!packageName.isEmpty()) {
-                    writer.write("package " + packageName + ";\n\n");
-                }
-                writer.write("public final class " + simpleName + typeParamsDecl
-                    + " implements " + targetType + " {\n");
-                writer.write("    private final io.lighting.lumen.db.Db db;\n");
-                writer.write("    private final io.lighting.lumen.sql.Dialect dialect;\n");
-                writer.write("    private final io.lighting.lumen.meta.EntityMetaRegistry metaRegistry;\n");
-                writer.write("    private final io.lighting.lumen.template.EntityNameResolver entityNameResolver;\n\n");
-                writer.write("    public " + simpleName + "(\n");
-                writer.write("        io.lighting.lumen.db.Db db,\n");
-                writer.write("        io.lighting.lumen.sql.Dialect dialect,\n");
-                writer.write("        io.lighting.lumen.meta.EntityMetaRegistry metaRegistry,\n");
-                writer.write("        io.lighting.lumen.template.EntityNameResolver entityNameResolver\n");
-                writer.write("    ) {\n");
-                writer.write("        this.db = java.util.Objects.requireNonNull(db, \"db\");\n");
-                writer.write("        this.dialect = java.util.Objects.requireNonNull(dialect, \"dialect\");\n");
-                writer.write("        this.metaRegistry = java.util.Objects.requireNonNull(metaRegistry, \"metaRegistry\");\n");
-                writer.write("        this.entityNameResolver = java.util.Objects.requireNonNull(entityNameResolver, \"entityNameResolver\");\n");
-                writer.write("    }\n\n");
+        StringBuilder content = new StringBuilder();
+        content.append(AptCodegenUtils.packageLine(packageName));
+        content.append("""
+            @SuppressWarnings("unused")
+            public final class %s%s implements %s {
+                private final io.lighting.lumen.db.Db db;
+                private final io.lighting.lumen.sql.Dialect dialect;
+                private final io.lighting.lumen.meta.EntityMetaRegistry metaRegistry;
+                private final io.lighting.lumen.template.EntityNameResolver entityNameResolver;
 
-                String templatesClass = (packageName.isEmpty() ? "" : packageName + ".")
-                    + type.getSimpleName() + "_SqlTemplates";
-                for (TemplateMethod templateMethod : methods) {
-                    ExecutableElement method = templateMethod.method();
-                    ReturnKind kind = resolveReturnKind(method);
-                    VariableElement rowMapperParam = findRowMapperParam(method);
-                    List<VariableElement> bindingParams = bindingParameters(method, rowMapperParam);
-                    String methodTypeParams = renderTypeParameters(method.getTypeParameters());
-                    if (!methodTypeParams.isEmpty()) {
-                        methodTypeParams = methodTypeParams + " ";
-                    }
-                    String returnType = method.getReturnType().toString();
-                    writer.write("    @Override\n");
-                    writer.write("    public " + methodTypeParams + returnType + " "
-                        + method.getSimpleName() + "(" + renderParameters(method) + ")");
-                    String throwsClause = renderThrows(method);
-                    if (!throwsClause.isEmpty()) {
-                        writer.write(" " + throwsClause);
-                    }
-                    writer.write(" {\n");
-                    writer.write("        io.lighting.lumen.sql.Bindings bindings = "
-                        + renderBindings(bindingParams) + ";\n");
-                    writer.write("        io.lighting.lumen.template.TemplateContext context = "
-                        + "new io.lighting.lumen.template.TemplateContext(\n");
-                    writer.write("            bindings.asMap(),\n");
-                    writer.write("            dialect,\n");
-                    writer.write("            metaRegistry,\n");
-                    writer.write("            entityNameResolver\n");
-                    writer.write("        );\n");
-                    writer.write("        io.lighting.lumen.sql.RenderedSql rendered = "
-                        + templatesClass + "." + templateMethod.constantName() + "_TEMPLATE.render(context);\n");
-                    writer.write(renderExecution(kind, rowMapperParam, returnType));
-                    writer.write("    }\n\n");
+                public %s(
+                    io.lighting.lumen.db.Db db,
+                    io.lighting.lumen.sql.Dialect dialect,
+                    io.lighting.lumen.meta.EntityMetaRegistry metaRegistry,
+                    io.lighting.lumen.template.EntityNameResolver entityNameResolver
+                ) {
+                    this.db = java.util.Objects.requireNonNull(db, "db");
+                    this.dialect = java.util.Objects.requireNonNull(dialect, "dialect");
+                    this.metaRegistry = java.util.Objects.requireNonNull(metaRegistry, "metaRegistry");
+                    this.entityNameResolver = java.util.Objects.requireNonNull(entityNameResolver, "entityNameResolver");
                 }
-                writer.write("}\n");
+
+            """.formatted(simpleName, typeParamsDecl, targetType, simpleName));
+
+        String templatesClass = (packageName.isEmpty() ? "" : packageName + ".")
+            + type.getSimpleName() + "_SqlTemplates";
+        for (TemplateMethod templateMethod : methods) {
+            ExecutableElement method = templateMethod.method();
+            ReturnKind kind = resolveReturnKind(method);
+            VariableElement rowMapperParam = findRowMapperParam(method);
+            List<VariableElement> bindingParams = bindingParameters(method, rowMapperParam);
+            String methodTypeParams = renderTypeParameters(method.getTypeParameters());
+            if (!methodTypeParams.isEmpty()) {
+                methodTypeParams = methodTypeParams + " ";
             }
-        } catch (IOException ex) {
-            processingEnv.getMessager()
-                .printMessage(Diagnostic.Kind.ERROR, "Failed to generate impl class: " + ex.getMessage(), type);
+            String returnType = method.getReturnType().toString();
+            String throwsClause = renderThrows(method);
+            if (!throwsClause.isEmpty()) {
+                throwsClause = " " + throwsClause;
+            }
+            content.append("""
+                    @Override
+                    public %s%s %s(%s)%s {
+                        io.lighting.lumen.sql.Bindings bindings = %s;
+                        io.lighting.lumen.template.TemplateContext context =
+                            new io.lighting.lumen.template.TemplateContext(
+                                bindings.asMap(),
+                                dialect,
+                                metaRegistry,
+                                entityNameResolver
+                            );
+                        io.lighting.lumen.sql.RenderedSql rendered =
+                            %s.%s_TEMPLATE.render(context);
+            """.formatted(
+                methodTypeParams,
+                returnType,
+                method.getSimpleName(),
+                renderParameters(method),
+                throwsClause,
+                renderBindings(bindingParams),
+                templatesClass,
+                templateMethod.constantName()
+            ));
+            content.append(renderExecution(kind, rowMapperParam, returnType));
+            content.append("    }\n\n");
         }
+        content.append("}\n");
+        AptCodegenUtils.writeSourceFile(
+            processingEnv.getFiler(),
+            processingEnv.getMessager(),
+            type,
+            qualifiedName,
+            content.toString(),
+            "Failed to generate impl class: "
+        );
     }
 
+    /**
+     * 为常量名追加序号，确保在同一类内唯一。
+     */
     private String uniqueConstantName(String base, Set<String> used) {
         String candidate = base;
         int index = 2;
@@ -266,54 +335,16 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return candidate;
     }
 
-    private String toConstantName(String name) {
-        StringBuilder builder = new StringBuilder();
-        char prev = '\0';
-        for (int i = 0; i < name.length(); i++) {
-            char ch = name.charAt(i);
-            if (!Character.isLetterOrDigit(ch)) {
-                if (builder.length() > 0 && builder.charAt(builder.length() - 1) != '_') {
-                    builder.append('_');
-                }
-                prev = ch;
-                continue;
-            }
-            if (Character.isUpperCase(ch) && i > 0
-                && (Character.isLowerCase(prev) || Character.isDigit(prev))) {
-                builder.append('_');
-            }
-            builder.append(Character.toUpperCase(ch));
-            prev = ch;
-        }
-        return builder.toString();
-    }
-
-    private String escapeJava(String value) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            switch (ch) {
-                case '\\' -> builder.append("\\\\");
-                case '\"' -> builder.append("\\\"");
-                case '\n' -> builder.append("\\n");
-                case '\r' -> builder.append("\\r");
-                case '\t' -> builder.append("\\t");
-                default -> {
-                    if (ch < 0x20 || ch > 0x7e) {
-                        builder.append(String.format("\\u%04x", (int) ch));
-                    } else {
-                        builder.append(ch);
-                    }
-                }
-            }
-        }
-        return builder.toString();
-    }
-
+    /**
+     * 输出编译期错误。
+     */
     private void error(Element element, String message) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
     }
 
+    /**
+     * 校验模板语法是否可解析。
+     */
     private boolean validateTemplate(Element element, String template) {
         try {
             io.lighting.lumen.template.SqlTemplate.parse(template);
@@ -324,6 +355,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * 校验方法必须声明在接口中。
+     */
     private boolean validateEnclosingType(ExecutableElement method) {
         Element enclosing = method.getEnclosingElement();
         if (enclosing.getKind() != ElementKind.INTERFACE) {
@@ -333,6 +367,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 校验方法签名：禁止 static、必须抛 SQLException、返回类型合法、RowMapper 参数符合约束。
+     */
     private boolean validateMethodSignature(ExecutableElement method) {
         if (method.getModifiers().contains(Modifier.STATIC)) {
             error(method, "@SqlTemplate methods must not be static");
@@ -351,6 +388,10 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
             error(method, "List-returning @SqlTemplate methods require a RowMapper parameter");
             return false;
         }
+        if (kind != ReturnKind.LIST && findRowMapperParam(method) != null) {
+            error(method, "RowMapper parameter is only allowed for List-returning @SqlTemplate methods");
+            return false;
+        }
         if (countRowMapperParams(method) > 1) {
             error(method, "@SqlTemplate methods must declare at most one RowMapper parameter");
             return false;
@@ -358,6 +399,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 校验模板绑定是否完整，且 @orderBy 片段不包含参数。
+     */
     private boolean validateTemplateBindings(ExecutableElement method, String template) {
         SqlTemplateAnalysis analysis = SqlTemplateAnalyzer.analyze(template);
         Set<String> methodBindings = new HashSet<>();
@@ -385,6 +429,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 判断方法是否声明 throws SQLException。
+     */
     private boolean declaresSqlException(ExecutableElement method) {
         TypeElement sqlException = processingEnv.getElementUtils().getTypeElement("java.sql.SQLException");
         if (sqlException == null) {
@@ -400,6 +447,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return false;
     }
 
+    /**
+     * 推断方法返回类型所对应的执行分支。
+     */
     private ReturnKind resolveReturnKind(ExecutableElement method) {
         TypeMirror returnType = method.getReturnType();
         Types types = processingEnv.getTypeUtils();
@@ -428,6 +478,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return ReturnKind.UNSUPPORTED;
     }
 
+    /**
+     * 判断类型是否与指定限定名相同（含基本类型兼容处理）。
+     */
     private boolean isSameType(TypeMirror type, String qualifiedName) {
         Types types = processingEnv.getTypeUtils();
         TypeElement element = processingEnv.getElementUtils().getTypeElement(qualifiedName);
@@ -443,6 +496,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return types.isSameType(type, element.asType());
     }
 
+    /**
+     * 查找 RowMapper 参数。
+     */
     private VariableElement findRowMapperParam(ExecutableElement method) {
         for (VariableElement param : method.getParameters()) {
             if (isRowMapperParam(param)) {
@@ -452,6 +508,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return null;
     }
 
+    /**
+     * 统计 RowMapper 参数数量。
+     */
     private int countRowMapperParams(ExecutableElement method) {
         int count = 0;
         for (VariableElement param : method.getParameters()) {
@@ -462,6 +521,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return count;
     }
 
+    /**
+     * 判断参数是否为 RowMapper（支持泛型擦除匹配）。
+     */
     private boolean isRowMapperParam(VariableElement param) {
         Types types = processingEnv.getTypeUtils();
         TypeElement rowMapper = processingEnv.getElementUtils().getTypeElement("io.lighting.lumen.jdbc.RowMapper");
@@ -471,6 +533,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return types.isAssignable(types.erasure(param.asType()), types.erasure(rowMapper.asType()));
     }
 
+    /**
+     * 过滤掉 RowMapper 参数，得到需要绑定到模板的参数列表。
+     */
     private List<VariableElement> bindingParameters(ExecutableElement method, VariableElement rowMapperParam) {
         List<VariableElement> params = new ArrayList<>();
         for (VariableElement param : method.getParameters()) {
@@ -482,6 +547,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return params;
     }
 
+    /**
+     * 渲染方法参数列表字符串。
+     */
     private String renderParameters(ExecutableElement method) {
         StringBuilder builder = new StringBuilder();
         List<? extends VariableElement> params = method.getParameters();
@@ -495,6 +563,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 渲染模板绑定表达式。
+     */
     private String renderBindings(List<VariableElement> params) {
         if (params.isEmpty()) {
             return "io.lighting.lumen.sql.Bindings.empty()";
@@ -511,6 +582,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 渲染 throws 子句。
+     */
     private String renderThrows(ExecutableElement method) {
         List<? extends TypeMirror> thrownTypes = method.getThrownTypes();
         if (thrownTypes.isEmpty()) {
@@ -526,6 +600,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 渲染执行逻辑的代码片段。
+     */
     private String renderExecution(ReturnKind kind, VariableElement rowMapperParam, String returnType) {
         StringBuilder builder = new StringBuilder();
         switch (kind) {
@@ -546,6 +623,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 渲染类型参数声明（例如 <T extends Foo>）。
+     */
     private String renderTypeParameters(List<? extends TypeParameterElement> typeParams) {
         if (typeParams.isEmpty()) {
             return "";
@@ -572,6 +652,9 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 渲染类型参数使用（例如 <T, R>）。
+     */
     private String renderTypeParameterUse(List<? extends TypeParameterElement> typeParams) {
         if (typeParams.isEmpty()) {
             return "";
@@ -587,11 +670,14 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
+    /**
+     * 判断泛型上界是否仅为 Object。
+     */
     private boolean isJavaLangObject(List<? extends TypeMirror> bounds) {
         if (bounds.size() != 1) {
             return false;
         }
-        TypeMirror bound = bounds.get(0);
+        TypeMirror bound = bounds.getFirst();
         return isSameType(bound, "java.lang.Object");
     }
 

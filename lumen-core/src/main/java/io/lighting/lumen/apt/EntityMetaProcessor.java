@@ -3,15 +3,11 @@ package io.lighting.lumen.apt;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
 import io.lighting.lumen.meta.Table;
-import java.io.IOException;
-import java.io.Writer;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Filer;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
@@ -25,43 +21,59 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 
+/**
+ * 实体元数据处理器。
+ * <p>
+ * 解析 {@link Table}/{@link Column}/{@link Id} 注解并生成 Q 类，
+ * 便于在 DSL 中安全引用表名与列名。
+ */
 @SupportedAnnotationTypes("io.lighting.lumen.meta.Table")
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class EntityMetaProcessor extends AbstractProcessor {
 
+    /**
+     * 处理入口：扫描 @Table 标注的类型并生成对应的 Q 类。
+     * <p>
+     * 若元素不符合约束，会在编译期输出错误并跳过该元素的生成。
+     */
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (roundEnv.processingOver()) {
             return false;
         }
-        boolean hasErrors = false;
         for (Element element : roundEnv.getElementsAnnotatedWith(Table.class)) {
             if (element.getKind() != ElementKind.CLASS && element.getKind() != ElementKind.RECORD) {
                 error(element, "@Table can only be applied to classes or records");
-                hasErrors = true;
                 continue;
             }
             TypeElement type = (TypeElement) element;
             Table table = type.getAnnotation(Table.class);
+            if (table == null) {
+                error(type, "Missing @Table annotation: " + type.getQualifiedName());
+                continue;
+            }
             String tableName = table.name();
             if (tableName.isBlank()) {
                 error(type, "Table name must not be blank: " + type.getQualifiedName());
-                hasErrors = true;
                 continue;
             }
             Map<String, String> fieldToColumn = new LinkedHashMap<>();
             Set<String> columns = new LinkedHashSet<>();
             if (!collectColumns(type, fieldToColumn, columns)) {
-                hasErrors = true;
                 continue;
             }
             generateQClass(type, tableName, fieldToColumn);
         }
-        return hasErrors;
+        return true;
     }
 
+    /**
+     * 收集字段到列名的映射。
+     * <p>
+     * 仅收集显式标注 {@link Column} 或 {@link Id} 的字段，跳过 static/transient 字段。
+     * 同时校验字段名、列名是否重复。
+     */
     private boolean collectColumns(
         TypeElement type,
         Map<String, String> fieldToColumn,
@@ -109,6 +121,9 @@ public final class EntityMetaProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * 判断类型是否为 java.lang.Object。
+     */
     private boolean isJavaLangObject(TypeMirror type) {
         if (type.getKind() == TypeKind.NONE) {
             return true;
@@ -117,81 +132,87 @@ public final class EntityMetaProcessor extends AbstractProcessor {
         return element != null && element.getQualifiedName().contentEquals("java.lang.Object");
     }
 
+    /**
+     * 生成 Q 类源码。
+     * <p>
+     * 生成内容包含：表常量、表别名、列访问方法等。
+     */
     private void generateQClass(TypeElement type, String tableName, Map<String, String> fieldToColumn) {
         String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
         String simpleName = "Q" + type.getSimpleName();
         String qualifiedName = packageName.isEmpty() ? simpleName : packageName + "." + simpleName;
-        String constName = toConstantName(type.getSimpleName().toString());
+        String constName = AptCodegenUtils.toConstantName(type.getSimpleName().toString());
         String defaultAlias = defaultAlias(type.getSimpleName().toString());
-        Filer filer = processingEnv.getFiler();
-        try {
-            JavaFileObject sourceFile = filer.createSourceFile(qualifiedName, type);
-            try (Writer writer = sourceFile.openWriter()) {
-                if (!packageName.isEmpty()) {
-                    writer.write("package " + packageName + ";\n\n");
-                }
-                writer.write("public final class " + simpleName + " {\n");
-                writer.write("    public static final " + simpleName + " " + constName + " = new "
-                    + simpleName + "(\"" + escapeJava(tableName) + "\", \"" + escapeJava(defaultAlias) + "\");\n");
-                writer.write("    private final String table;\n");
-                writer.write("    private final String alias;\n\n");
-                writer.write("    private " + simpleName + "(String table, String alias) {\n");
-                writer.write("        this.table = table;\n");
-                writer.write("        this.alias = alias;\n");
-                writer.write("    }\n\n");
-                writer.write("    public " + simpleName + " as(String alias) {\n");
-                writer.write("        if (alias == null || alias.isBlank()) {\n");
-                writer.write("            throw new IllegalArgumentException(\"alias must not be blank\");\n");
-                writer.write("        }\n");
-                writer.write("        return new " + simpleName + "(this.table, alias);\n");
-                writer.write("    }\n\n");
-                writer.write("    public String table() {\n");
-                writer.write("        return table;\n");
-                writer.write("    }\n\n");
-                writer.write("    public String alias() {\n");
-                writer.write("        return alias;\n");
-                writer.write("    }\n\n");
-                writer.write("    public io.lighting.lumen.sql.ast.TableRef ref() {\n");
-                writer.write("        return new io.lighting.lumen.sql.ast.TableRef(table, alias);\n");
-                writer.write("    }\n\n");
-                for (Map.Entry<String, String> entry : fieldToColumn.entrySet()) {
-                    String fieldName = entry.getKey();
-                    String columnName = entry.getValue();
-                    writer.write("    public io.lighting.lumen.dsl.ColumnRef " + fieldName + "() {\n");
-                    writer.write("        return io.lighting.lumen.dsl.ColumnRef.of(alias, \""
-                        + escapeJava(columnName) + "\");\n");
-                    writer.write("    }\n\n");
-                }
-                writer.write("}\n");
-            }
-        } catch (IOException ex) {
-            processingEnv.getMessager()
-                .printMessage(Diagnostic.Kind.ERROR, "Failed to generate Q-class: " + ex.getMessage(), type);
+        StringBuilder columnsBuilder = new StringBuilder();
+        for (Map.Entry<String, String> entry : fieldToColumn.entrySet()) {
+            String fieldName = entry.getKey();
+            String columnName = entry.getValue();
+            columnsBuilder.append("""
+                    public io.lighting.lumen.dsl.ColumnRef %s() {
+                        return io.lighting.lumen.dsl.ColumnRef.of(alias, "%s");
+                    }
+
+                """.formatted(fieldName, AptCodegenUtils.escapeJava(columnName)));
         }
+        StringBuilder content = new StringBuilder();
+        content.append(AptCodegenUtils.packageLine(packageName));
+        content.append("""
+            @SuppressWarnings("unused")
+            public final class %s {
+                public static final %s %s = new %s("%s", "%s");
+                private final String table;
+                private final String alias;
+
+                private %s(String table, String alias) {
+                    this.table = table;
+                    this.alias = alias;
+                }
+
+                public %s as(String alias) {
+                    if (alias == null || alias.isBlank()) {
+                        throw new IllegalArgumentException("alias must not be blank");
+                    }
+                    return new %s(this.table, alias);
+                }
+
+                public String table() {
+                    return table;
+                }
+
+                public String alias() {
+                    return alias;
+                }
+
+                public io.lighting.lumen.sql.ast.TableRef ref() {
+                    return new io.lighting.lumen.sql.ast.TableRef(table, alias);
+                }
+
+            """.formatted(
+            simpleName,
+            simpleName,
+            constName,
+            simpleName,
+            AptCodegenUtils.escapeJava(tableName),
+            AptCodegenUtils.escapeJava(defaultAlias),
+            simpleName,
+            simpleName,
+            simpleName
+        ));
+        content.append(columnsBuilder);
+        content.append("}\n");
+        AptCodegenUtils.writeSourceFile(
+            processingEnv.getFiler(),
+            processingEnv.getMessager(),
+            type,
+            qualifiedName,
+            content.toString(),
+            "Failed to generate Q-class: "
+        );
     }
 
-    private String toConstantName(String name) {
-        StringBuilder builder = new StringBuilder();
-        char prev = '\0';
-        for (int i = 0; i < name.length(); i++) {
-            char ch = name.charAt(i);
-            if (!Character.isLetterOrDigit(ch)) {
-                if (builder.length() > 0 && builder.charAt(builder.length() - 1) != '_') {
-                    builder.append('_');
-                }
-                prev = ch;
-                continue;
-            }
-            if (Character.isUpperCase(ch) && i > 0
-                && (Character.isLowerCase(prev) || Character.isDigit(prev))) {
-                builder.append('_');
-            }
-            builder.append(Character.toUpperCase(ch));
-            prev = ch;
-        }
-        return builder.toString();
-    }
-
+    /**
+     * 推导默认表别名：取实体名中第一个可用的字母或数字的小写形式。
+     */
     private String defaultAlias(String name) {
         for (int i = 0; i < name.length(); i++) {
             char ch = name.charAt(i);
@@ -202,28 +223,9 @@ public final class EntityMetaProcessor extends AbstractProcessor {
         return "t";
     }
 
-    private String escapeJava(String value) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            switch (ch) {
-                case '\\' -> builder.append("\\\\");
-                case '\"' -> builder.append("\\\"");
-                case '\n' -> builder.append("\\n");
-                case '\r' -> builder.append("\\r");
-                case '\t' -> builder.append("\\t");
-                default -> {
-                    if (ch < 0x20 || ch > 0x7e) {
-                        builder.append(String.format("\\u%04x", (int) ch));
-                    } else {
-                        builder.append(ch);
-                    }
-                }
-            }
-        }
-        return builder.toString();
-    }
-
+    /**
+     * 输出编译期错误。
+     */
     private void error(Element element, String message) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
     }
