@@ -248,11 +248,28 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         content.append(AptCodegenUtils.packageLine(packageName));
         content.append("""
             @SuppressWarnings("unused")
-            public final class %s%s implements %s {
+            public final class %s%s implements %s, io.lighting.lumen.dao.DaoContextProvider {
                 private final io.lighting.lumen.db.Db db;
                 private final io.lighting.lumen.sql.Dialect dialect;
                 private final io.lighting.lumen.meta.EntityMetaRegistry metaRegistry;
                 private final io.lighting.lumen.template.EntityNameResolver entityNameResolver;
+                private final io.lighting.lumen.sql.SqlRenderer renderer;
+                private final io.lighting.lumen.dao.DaoContext daoContext;
+
+                public %s(
+                    io.lighting.lumen.db.Db db,
+                    io.lighting.lumen.sql.Dialect dialect,
+                    io.lighting.lumen.meta.EntityMetaRegistry metaRegistry,
+                    io.lighting.lumen.template.EntityNameResolver entityNameResolver,
+                    io.lighting.lumen.sql.SqlRenderer renderer
+                ) {
+                    this.db = java.util.Objects.requireNonNull(db, "db");
+                    this.dialect = java.util.Objects.requireNonNull(dialect, "dialect");
+                    this.metaRegistry = java.util.Objects.requireNonNull(metaRegistry, "metaRegistry");
+                    this.entityNameResolver = java.util.Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+                    this.renderer = java.util.Objects.requireNonNull(renderer, "renderer");
+                    this.daoContext = io.lighting.lumen.dao.DaoContext.of(db, renderer, metaRegistry);
+                }
 
                 public %s(
                     io.lighting.lumen.db.Db db,
@@ -260,13 +277,21 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                     io.lighting.lumen.meta.EntityMetaRegistry metaRegistry,
                     io.lighting.lumen.template.EntityNameResolver entityNameResolver
                 ) {
-                    this.db = java.util.Objects.requireNonNull(db, "db");
-                    this.dialect = java.util.Objects.requireNonNull(dialect, "dialect");
-                    this.metaRegistry = java.util.Objects.requireNonNull(metaRegistry, "metaRegistry");
-                    this.entityNameResolver = java.util.Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+                    this(
+                        db,
+                        dialect,
+                        metaRegistry,
+                        entityNameResolver,
+                        new io.lighting.lumen.sql.SqlRenderer(dialect)
+                    );
                 }
 
-            """.formatted(simpleName, typeParamsDecl, targetType, simpleName));
+                @Override
+                public io.lighting.lumen.dao.DaoContext daoContext() {
+                    return daoContext;
+                }
+
+            """.formatted(simpleName, typeParamsDecl, targetType, simpleName, simpleName));
 
         String templatesClass = (packageName.isEmpty() ? "" : packageName + ".")
             + type.getSimpleName() + "_SqlTemplates";

@@ -87,13 +87,24 @@ public final class Lumen {
         String implName = daoType.getName() + "_Impl";
         try {
             Class<?> implClass = Class.forName(implName, true, daoType.getClassLoader());
-            Constructor<?> ctor = implClass.getConstructor(
-                Db.class,
-                Dialect.class,
-                EntityMetaRegistry.class,
-                EntityNameResolver.class
-            );
-            return ctor.newInstance(db, dialect, metaRegistry, entityNameResolver);
+            try {
+                Constructor<?> ctor = implClass.getConstructor(
+                    Db.class,
+                    Dialect.class,
+                    EntityMetaRegistry.class,
+                    EntityNameResolver.class,
+                    SqlRenderer.class
+                );
+                return ctor.newInstance(db, dialect, metaRegistry, entityNameResolver, renderer);
+            } catch (NoSuchMethodException ex) {
+                Constructor<?> ctor = implClass.getConstructor(
+                    Db.class,
+                    Dialect.class,
+                    EntityMetaRegistry.class,
+                    EntityNameResolver.class
+                );
+                return ctor.newInstance(db, dialect, metaRegistry, entityNameResolver);
+            }
         } catch (ClassNotFoundException ex) {
             // Fallback to runtime SQL template proxy when no APT-generated implementation exists.
             return io.lighting.lumen.template.SqlTemplateProxyFactory.create(
@@ -101,7 +112,8 @@ public final class Lumen {
                 db,
                 dialect,
                 metaRegistry,
-                entityNameResolver
+                entityNameResolver,
+                renderer
             );
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to create DAO implementation: " + implName, ex);

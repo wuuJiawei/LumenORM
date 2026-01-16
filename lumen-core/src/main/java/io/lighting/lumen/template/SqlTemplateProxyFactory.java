@@ -5,6 +5,8 @@ import io.lighting.lumen.db.Db;
 import io.lighting.lumen.db.Query;
 import io.lighting.lumen.jdbc.RowMapper;
 import io.lighting.lumen.jdbc.RowMappers;
+import io.lighting.lumen.dao.DaoContext;
+import io.lighting.lumen.dao.DaoContextProvider;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.page.PageRequest;
 import io.lighting.lumen.page.PageResult;
@@ -12,6 +14,7 @@ import io.lighting.lumen.page.PageSql;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.RenderedPagination;
+import io.lighting.lumen.sql.SqlRenderer;
 import io.lighting.lumen.template.annotations.SqlTemplate;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -30,10 +33,10 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Runtime SQL template mapper factory.
+ * Runtime SQL template DAO factory.
  * <p>
  * When no APT-generated implementation is present, this factory creates a dynamic proxy
- * that interprets {@link SqlTemplate} annotations at runtime, similar to MyBatis mappers.
+ * that interprets {@link SqlTemplate} annotations at runtime, similar to MyBatis-style interfaces.
  */
 public final class SqlTemplateProxyFactory {
     private SqlTemplateProxyFactory() {
@@ -42,12 +45,12 @@ public final class SqlTemplateProxyFactory {
     /**
      * Create a dynamic proxy for a {@link SqlTemplate}-annotated interface.
      *
-     * @param daoType           mapper interface
+     * @param daoType           DAO interface
      * @param db                database handle used for execution
      * @param dialect           dialect for pagination / identifier rendering
      * @param metaRegistry      entity meta registry
      * @param entityNameResolver entity name resolver for @table/@col macros
-     * @param <T>               mapper type
+     * @param <T>               DAO type
      * @return proxy instance
      */
     public static <T> T create(
@@ -57,11 +60,35 @@ public final class SqlTemplateProxyFactory {
         EntityMetaRegistry metaRegistry,
         EntityNameResolver entityNameResolver
     ) {
+        return create(daoType, db, dialect, metaRegistry, entityNameResolver, new SqlRenderer(dialect));
+    }
+
+    /**
+     * Create a dynamic proxy for a {@link SqlTemplate}-annotated interface.
+     *
+     * @param daoType           DAO interface
+     * @param db                database handle used for execution
+     * @param dialect           dialect for pagination / identifier rendering
+     * @param metaRegistry      entity meta registry
+     * @param entityNameResolver entity name resolver for @table/@col macros
+     * @param renderer          SQL renderer
+     * @param <T>               DAO type
+     * @return proxy instance
+     */
+    public static <T> T create(
+        Class<T> daoType,
+        Db db,
+        io.lighting.lumen.sql.Dialect dialect,
+        EntityMetaRegistry metaRegistry,
+        EntityNameResolver entityNameResolver,
+        SqlRenderer renderer
+    ) {
         Objects.requireNonNull(daoType, "daoType");
         Objects.requireNonNull(db, "db");
         Objects.requireNonNull(dialect, "dialect");
         Objects.requireNonNull(metaRegistry, "metaRegistry");
         Objects.requireNonNull(entityNameResolver, "entityNameResolver");
+        Objects.requireNonNull(renderer, "renderer");
         if (!daoType.isInterface()) {
             throw new IllegalArgumentException("DAO type must be an interface: " + daoType.getName());
         }
@@ -70,7 +97,8 @@ public final class SqlTemplateProxyFactory {
             db,
             dialect,
             metaRegistry,
-            entityNameResolver
+            entityNameResolver,
+            renderer
         );
         Object proxy = Proxy.newProxyInstance(
             daoType.getClassLoader(),
@@ -80,11 +108,12 @@ public final class SqlTemplateProxyFactory {
         return daoType.cast(proxy);
     }
 
-    private static final class SqlTemplateInvocationHandler implements InvocationHandler {
+    private static final class SqlTemplateInvocationHandler implements InvocationHandler, DaoContextProvider {
         private final Db db;
         private final io.lighting.lumen.sql.Dialect dialect;
         private final EntityMetaRegistry metaRegistry;
         private final EntityNameResolver entityNameResolver;
+        private final DaoContext daoContext;
         private final Map<Method, MethodHandler> handlers;
 
         private SqlTemplateInvocationHandler(
@@ -92,12 +121,14 @@ public final class SqlTemplateProxyFactory {
             Db db,
             io.lighting.lumen.sql.Dialect dialect,
             EntityMetaRegistry metaRegistry,
-            EntityNameResolver entityNameResolver
+            EntityNameResolver entityNameResolver,
+            SqlRenderer renderer
         ) {
             this.db = db;
             this.dialect = dialect;
             this.metaRegistry = metaRegistry;
             this.entityNameResolver = entityNameResolver;
+            this.daoContext = DaoContext.of(db, renderer, metaRegistry);
             this.handlers = buildHandlers(daoType);
         }
 
@@ -120,6 +151,11 @@ public final class SqlTemplateProxyFactory {
                 entityNameResolver,
                 args == null ? new Object[0] : args
             );
+        }
+
+        @Override
+        public DaoContext daoContext() {
+            return daoContext;
         }
 
         private static Object invokeDefault(Object proxy, Method method, Object[] args) throws Throwable {
