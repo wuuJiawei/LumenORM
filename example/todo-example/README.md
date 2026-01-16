@@ -17,6 +17,11 @@ The API will start at `http://localhost:8080`. Open `http://localhost:8080/` for
 - `PUT /todos/{id}` update
 - `DELETE /todos/{id}` delete
 - `GET /todos?page=1&pageSize=20&completed=true` list with pagination
+- `POST /labels` create a label
+- `GET /labels/{id}` get label detail
+- `PUT /labels/{id}` update label
+- `DELETE /labels/{id}` delete label (logical delete)
+- `GET /labels?page=1&pageSize=20&keyword=work&count=false` list labels via BaseDao
 - `GET /` simple UI page
 
 ## Sample Requests

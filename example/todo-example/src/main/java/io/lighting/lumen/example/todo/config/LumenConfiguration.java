@@ -3,6 +3,7 @@ package io.lighting.lumen.example.todo.config;
 import io.lighting.lumen.Lumen;
 import io.lighting.lumen.db.Db;
 import io.lighting.lumen.db.SqlLog;
+import io.lighting.lumen.example.todo.repo.TodoLabelDao;
 import io.lighting.lumen.example.todo.repo.TodoQueryDao;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -45,5 +46,10 @@ public class LumenConfiguration {
     @Bean
     public TodoQueryDao todoQueryDao(Lumen lumen) {
         return lumen.dao(TodoQueryDao.class);
+    }
+
+    @Bean
+    public TodoLabelDao todoLabelDao(Lumen lumen) {
+        return lumen.dao(TodoLabelDao.class);
     }
 }

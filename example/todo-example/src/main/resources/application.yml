@@ -14,7 +14,7 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 server:
-  port: 8080
+  port: 8008
 lumen:
   sql:
     log:
