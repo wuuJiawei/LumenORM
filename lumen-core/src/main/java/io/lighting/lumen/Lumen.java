@@ -129,6 +129,7 @@ public final class Lumen {
         private final Map<String, Class<?>> entityNameMappings = new LinkedHashMap<>();
         private SqlRenderer renderer;
         private List<DbObserver> observers = List.of();
+        private boolean startupLogEnabled = true;
 
         private Builder() {
         }
@@ -190,6 +191,11 @@ public final class Lumen {
             return this;
         }
 
+        public Builder startupLogEnabled(boolean enabled) {
+            this.startupLogEnabled = enabled;
+            return this;
+        }
+
         public Lumen build() {
             Dialect resolvedDialect = resolveDialect();
             EntityNameResolver resolvedEntityNameResolver = resolveEntityNameResolver();
@@ -208,7 +214,11 @@ public final class Lumen {
                 );
             }
             Dsl dsl = new Dsl(metaRegistry);
-            return new Lumen(finalDb, dsl, resolvedDialect, metaRegistry, resolvedEntityNameResolver, finalRenderer);
+            Lumen lumen = new Lumen(finalDb, dsl, resolvedDialect, metaRegistry, resolvedEntityNameResolver, finalRenderer);
+            if (startupLogEnabled) {
+                logStartup(lumen);
+            }
+            return lumen;
         }
 
         private Dialect resolveDialect() {
@@ -230,6 +240,25 @@ public final class Lumen {
                 return autoResolver;
             }
             return EntityNameResolvers.withFallback(entityNameResolver, autoResolver);
+        }
+    }
+
+    private static void logStartup(Lumen lumen) {
+        String message = "Lumen started (dialect=" + lumen.dialect().id() + ", db=" + lumen.db().getClass().getSimpleName() + ")";
+        if (trySlf4j(Lumen.class, message)) {
+            return;
+        }
+        System.out.println(message);
+    }
+
+    private static boolean trySlf4j(Class<?> type, String message) {
+        try {
+            Class<?> factory = Class.forName("org.slf4j.LoggerFactory");
+            Object logger = factory.getMethod("getLogger", Class.class).invoke(null, type);
+            logger.getClass().getMethod("info", String.class).invoke(logger, message);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            return false;
         }
     }
 }

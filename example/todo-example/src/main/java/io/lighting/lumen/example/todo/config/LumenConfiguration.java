@@ -3,8 +3,6 @@ package io.lighting.lumen.example.todo.config;
 import io.lighting.lumen.Lumen;
 import io.lighting.lumen.db.Db;
 import io.lighting.lumen.db.SqlLog;
-import io.lighting.lumen.example.todo.repo.TodoLabelDao;
-import io.lighting.lumen.example.todo.repo.TodoQueryDao;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 @Configuration
+@LumenDaoScan(basePackages = "io.lighting.lumen.example.todo.repo")
 @EnableConfigurationProperties(LumenSqlLogProperties.class)
 public class LumenConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(LumenConfiguration.class);
@@ -43,13 +42,4 @@ public class LumenConfiguration {
         return lumen.db();
     }
 
-    @Bean
-    public TodoQueryDao todoQueryDao(Lumen lumen) {
-        return lumen.dao(TodoQueryDao.class);
-    }
-
-    @Bean
-    public TodoLabelDao todoLabelDao(Lumen lumen) {
-        return lumen.dao(TodoLabelDao.class);
-    }
 }
