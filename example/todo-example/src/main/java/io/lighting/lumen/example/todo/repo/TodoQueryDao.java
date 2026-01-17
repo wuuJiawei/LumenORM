@@ -12,14 +12,14 @@ import java.util.List;
 public interface TodoQueryDao {
     String TEMPLATE_FIND_BY_ID = """
         SELECT
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::id) AS id,
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::title) AS title,
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::description) AS description,
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::completed) AS completed,
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::createdAt) AS createdAt,
-          t.@col(io.lighting.lumen.example.todo.model.TodoEntity::updatedAt) AS updatedAt
-        FROM @table(io.lighting.lumen.example.todo.model.TodoEntity) t
-        WHERE t.@col(io.lighting.lumen.example.todo.model.TodoEntity::id) = :id
+          ID AS id,
+          TITLE AS title,
+          DESCRIPTION AS description,
+          COMPLETED AS completed,
+          CREATED_AT AS createdAt,
+          UPDATED_AT AS updatedAt
+        FROM TODOS
+        WHERE ID = :id
         """;
 
     String TEMPLATE_LIST = """
