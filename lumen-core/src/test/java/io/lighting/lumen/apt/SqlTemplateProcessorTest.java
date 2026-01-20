@@ -117,7 +117,7 @@ class SqlTemplateProcessorTest {
     }
 
     @Test
-    void requiresRowMapperForListReturn() throws IOException {
+    void allowsListReturnWithoutRowMapperWhenElementTypePresent() throws IOException {
         String source = """
             package example;
 
@@ -130,9 +130,84 @@ class SqlTemplateProcessorTest {
             }
             """;
         CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(result.success());
+    }
+
+    @Test
+    void requiresRowMapperForRawListReturn() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.template.annotations.SqlTemplate;
+            import java.util.List;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT 1")
+                List load() throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
         assertTrue(!result.success());
         assertTrue(result.diagnostics().stream()
             .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("RowMapper parameter")));
+    }
+
+    @Test
+    void allowsPageResultWithPageRequest() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.page.PageRequest;
+            import io.lighting.lumen.page.PageResult;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT 1")
+                PageResult<String> page(PageRequest page) throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(result.success());
+    }
+
+    @Test
+    void rejectsPageResultWithoutPageRequestOrPageDirective() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.page.PageResult;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT 1")
+                PageResult<String> page() throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null).contains("@page is required")));
+    }
+
+    @Test
+    void rejectsPageResultWithoutElementType() throws IOException {
+        String source = """
+            package example;
+
+            import io.lighting.lumen.page.PageRequest;
+            import io.lighting.lumen.page.PageResult;
+            import io.lighting.lumen.template.annotations.SqlTemplate;
+
+            public interface OrderRepo {
+                @SqlTemplate("SELECT 1")
+                PageResult page(PageRequest page) throws java.sql.SQLException;
+            }
+            """;
+        CompilationResult result = compile("example.OrderRepo", source);
+        assertTrue(!result.success());
+        assertTrue(result.diagnostics().stream()
+            .anyMatch(diagnostic -> diagnostic.getMessage(null)
+                .contains("PageResult return type must declare an element type")));
     }
 
     private CompilationResult compile(String name, String source) throws IOException {

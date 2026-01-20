@@ -1057,3 +1057,9 @@ interface Db {
   int execute(Command command);
 }
 ```
+
+## 附录：APT 与运行时代理
+
+如果你关心 `@SqlTemplate` 在编译期（APT）与运行时代理的关系、使用方式与性能取舍，请看：
+
+- `docs/APT_GUIDE.md`

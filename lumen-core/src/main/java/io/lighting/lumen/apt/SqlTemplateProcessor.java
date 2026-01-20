@@ -91,10 +91,6 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                 hasErrors = true;
                 continue;
             }
-            if (!validateMethodSignature(method)) {
-                hasErrors = true;
-                continue;
-            }
             SqlTemplate annotation = method.getAnnotation(SqlTemplate.class);
             if (annotation == null) {
                 error(method, "Missing @SqlTemplate annotation");
@@ -106,7 +102,12 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                 hasErrors = true;
                 continue;
             }
-            if (!validateTemplateBindings(method, template)) {
+            if (!validateMethodSignature(method, template)) {
+                hasErrors = true;
+                continue;
+            }
+            SqlTemplateAnalysis analysis = SqlTemplateAnalyzer.analyze(template);
+            if (!validateTemplateBindings(method, analysis)) {
                 hasErrors = true;
                 continue;
             }
@@ -295,10 +296,12 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
 
         String templatesClass = (packageName.isEmpty() ? "" : packageName + ".")
             + type.getSimpleName() + "_SqlTemplates";
+        boolean needsPageHelpers = false;
         for (TemplateMethod templateMethod : methods) {
             ExecutableElement method = templateMethod.method();
-            ReturnKind kind = resolveReturnKind(method);
+            ReturnDescriptor descriptor = resolveReturnDescriptor(method, templateMethod.template());
             VariableElement rowMapperParam = findRowMapperParam(method);
+            PageParam pageParam = findPageParam(method);
             List<VariableElement> bindingParams = bindingParameters(method, rowMapperParam);
             String methodTypeParams = renderTypeParameters(method.getTypeParameters());
             if (!methodTypeParams.isEmpty()) {
@@ -309,6 +312,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
             if (!throwsClause.isEmpty()) {
                 throwsClause = " " + throwsClause;
             }
+            String templateRef = templatesClass + "." + templateMethod.constantName() + "_TEMPLATE";
             content.append("""
                     @Override
                     public %s%s %s(%s)%s {
@@ -332,8 +336,14 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                 templatesClass,
                 templateMethod.constantName()
             ));
-            content.append(renderExecution(kind, rowMapperParam, returnType));
+            content.append(renderExecution(descriptor, rowMapperParam, pageParam, returnType, templateRef));
             content.append("    }\n\n");
+            if (descriptor.kind() == ReturnKind.PAGE) {
+                needsPageHelpers = true;
+            }
+        }
+        if (needsPageHelpers) {
+            content.append(renderPageHelpers());
         }
         content.append("}\n");
         AptCodegenUtils.writeSourceFile(
@@ -380,6 +390,11 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         }
     }
 
+    private boolean hasPageDirective(String template) {
+        io.lighting.lumen.template.SqlTemplate parsed = io.lighting.lumen.template.SqlTemplate.parse(template);
+        return io.lighting.lumen.template.SqlTemplatePages.find(parsed) != null;
+    }
+
     /**
      * 校验方法必须声明在接口中。
      */
@@ -395,7 +410,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     /**
      * 校验方法签名：禁止 static、必须抛 SQLException、返回类型合法、RowMapper 参数符合约束。
      */
-    private boolean validateMethodSignature(ExecutableElement method) {
+    private boolean validateMethodSignature(ExecutableElement method, String template) {
         if (method.getModifiers().contains(Modifier.STATIC)) {
             error(method, "@SqlTemplate methods must not be static");
             return false;
@@ -404,22 +419,38 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
             error(method, "@SqlTemplate methods must declare throws SQLException");
             return false;
         }
-        ReturnKind kind = resolveReturnKind(method);
-        if (kind == ReturnKind.UNSUPPORTED) {
-            error(method, "@SqlTemplate methods must return List, RenderedSql, Query, Command, int, long, or void");
-            return false;
-        }
-        if (kind == ReturnKind.LIST && findRowMapperParam(method) == null) {
-            error(method, "List-returning @SqlTemplate methods require a RowMapper parameter");
-            return false;
-        }
-        if (kind != ReturnKind.LIST && findRowMapperParam(method) != null) {
-            error(method, "RowMapper parameter is only allowed for List-returning @SqlTemplate methods");
-            return false;
-        }
+        ReturnDescriptor descriptor = resolveReturnDescriptor(method, template);
         if (countRowMapperParams(method) > 1) {
             error(method, "@SqlTemplate methods must declare at most one RowMapper parameter");
             return false;
+        }
+        VariableElement rowMapperParam = findRowMapperParam(method);
+        if (rowMapperParam != null
+            && descriptor.kind() != ReturnKind.LIST
+            && descriptor.kind() != ReturnKind.PAGE
+            && descriptor.kind() != ReturnKind.SINGLE) {
+            error(method, "RowMapper parameter is only allowed for List, PageResult, or single-row @SqlTemplate methods");
+            return false;
+        }
+        if (descriptor.kind() == ReturnKind.LIST && descriptor.resultTypeName() == null && rowMapperParam == null) {
+            error(method, "List-returning @SqlTemplate methods require a RowMapper parameter");
+            return false;
+        }
+        int pageParamCount = countPageParams(method);
+        if (pageParamCount > 1) {
+            error(method, "@SqlTemplate methods must declare at most one PageRequest/Page parameter");
+            return false;
+        }
+        if (descriptor.kind() == ReturnKind.PAGE) {
+            if (descriptor.resultTypeName() == null) {
+                error(method, "PageResult return type must declare an element type");
+                return false;
+            }
+            if (pageParamCount == 0 && !hasPageDirective(template)) {
+                error(method,
+                    "@page is required for PageResult return types unless a PageRequest/Page parameter is present");
+                return false;
+            }
         }
         return true;
     }
@@ -427,8 +458,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     /**
      * 校验模板绑定是否完整，且 @orderBy 片段不包含参数。
      */
-    private boolean validateTemplateBindings(ExecutableElement method, String template) {
-        SqlTemplateAnalysis analysis = SqlTemplateAnalyzer.analyze(template);
+    private boolean validateTemplateBindings(ExecutableElement method, SqlTemplateAnalysis analysis) {
         Set<String> methodBindings = new HashSet<>();
         for (VariableElement param : method.getParameters()) {
             String name = param.getSimpleName().toString();
@@ -475,32 +505,90 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     /**
      * 推断方法返回类型所对应的执行分支。
      */
-    private ReturnKind resolveReturnKind(ExecutableElement method) {
+    private ReturnDescriptor resolveReturnDescriptor(ExecutableElement method, String template) {
         TypeMirror returnType = method.getReturnType();
-        Types types = processingEnv.getTypeUtils();
         if (returnType.getKind() == TypeKind.VOID) {
-            return ReturnKind.VOID;
+            return new ReturnDescriptor(ReturnKind.VOID, null, false, false);
         }
         if (isSameType(returnType, "int") || isSameType(returnType, "java.lang.Integer")) {
-            return ReturnKind.INT;
+            return new ReturnDescriptor(ReturnKind.INT, null, isSelectLike(template), false);
         }
         if (isSameType(returnType, "long") || isSameType(returnType, "java.lang.Long")) {
-            return ReturnKind.LONG;
+            return new ReturnDescriptor(ReturnKind.LONG, null, isSelectLike(template), false);
         }
         if (isSameType(returnType, "io.lighting.lumen.sql.RenderedSql")) {
-            return ReturnKind.RENDERED_SQL;
+            return new ReturnDescriptor(ReturnKind.RENDERED_SQL, null, false, false);
         }
         if (isSameType(returnType, "io.lighting.lumen.db.Query")) {
-            return ReturnKind.QUERY;
+            return new ReturnDescriptor(ReturnKind.QUERY, null, false, false);
         }
         if (isSameType(returnType, "io.lighting.lumen.db.Command")) {
-            return ReturnKind.COMMAND;
+            return new ReturnDescriptor(ReturnKind.COMMAND, null, false, false);
         }
+        if (isPageResultType(returnType)) {
+            String elementType = resolveElementTypeName(returnType);
+            return new ReturnDescriptor(ReturnKind.PAGE, elementType, false, false);
+        }
+        if (isListType(returnType)) {
+            String elementType = resolveElementTypeName(returnType);
+            return new ReturnDescriptor(ReturnKind.LIST, elementType, false, false);
+        }
+        String returnTypeName = resolveReturnTypeName(returnType);
+        return new ReturnDescriptor(ReturnKind.SINGLE, returnTypeName, false, returnType.getKind().isPrimitive());
+    }
+
+    private boolean isListType(TypeMirror returnType) {
+        Types types = processingEnv.getTypeUtils();
         TypeElement listType = processingEnv.getElementUtils().getTypeElement("java.util.List");
-        if (listType != null && types.isSameType(types.erasure(returnType), types.erasure(listType.asType()))) {
-            return ReturnKind.LIST;
+        if (listType == null) {
+            return false;
         }
-        return ReturnKind.UNSUPPORTED;
+        return types.isSameType(types.erasure(returnType), types.erasure(listType.asType()));
+    }
+
+    private boolean isPageResultType(TypeMirror returnType) {
+        Types types = processingEnv.getTypeUtils();
+        TypeElement pageResult = processingEnv.getElementUtils().getTypeElement("io.lighting.lumen.page.PageResult");
+        if (pageResult == null) {
+            return false;
+        }
+        return types.isSameType(types.erasure(returnType), types.erasure(pageResult.asType()));
+    }
+
+    private String resolveElementTypeName(TypeMirror returnType) {
+        if (!(returnType instanceof javax.lang.model.type.DeclaredType declaredType)) {
+            return null;
+        }
+        List<? extends TypeMirror> args = declaredType.getTypeArguments();
+        if (args.size() != 1) {
+            return null;
+        }
+        TypeMirror arg = args.get(0);
+        if (arg.getKind() != TypeKind.DECLARED && arg.getKind() != TypeKind.ARRAY && arg.getKind() != TypeKind.ERROR) {
+            return null;
+        }
+        Types types = processingEnv.getTypeUtils();
+        return types.erasure(arg).toString();
+    }
+
+    private String resolveReturnTypeName(TypeMirror returnType) {
+        Types types = processingEnv.getTypeUtils();
+        return types.erasure(returnType).toString();
+    }
+
+    private boolean isSelectLike(String sql) {
+        if (sql == null) {
+            return false;
+        }
+        String trimmed = sql.stripLeading();
+        return startsWithIgnoreCase(trimmed, "select") || startsWithIgnoreCase(trimmed, "with");
+    }
+
+    private boolean startsWithIgnoreCase(String value, String prefix) {
+        if (value.length() < prefix.length()) {
+            return false;
+        }
+        return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     /**
@@ -556,6 +644,54 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
             return false;
         }
         return types.isAssignable(types.erasure(param.asType()), types.erasure(rowMapper.asType()));
+    }
+
+    private PageParam findPageParam(ExecutableElement method) {
+        for (VariableElement param : method.getParameters()) {
+            PageParamKind kind = pageParamKind(param);
+            if (kind != null) {
+                return new PageParam(param, kind);
+            }
+        }
+        return null;
+    }
+
+    private int countPageParams(ExecutableElement method) {
+        int count = 0;
+        for (VariableElement param : method.getParameters()) {
+            if (pageParamKind(param) != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private PageParamKind pageParamKind(VariableElement param) {
+        if (isPageRequestParam(param)) {
+            return PageParamKind.REQUEST;
+        }
+        if (isActivePageParam(param)) {
+            return PageParamKind.ACTIVE;
+        }
+        return null;
+    }
+
+    private boolean isPageRequestParam(VariableElement param) {
+        Types types = processingEnv.getTypeUtils();
+        TypeElement pageRequest = processingEnv.getElementUtils().getTypeElement("io.lighting.lumen.page.PageRequest");
+        if (pageRequest == null) {
+            return false;
+        }
+        return types.isAssignable(types.erasure(param.asType()), types.erasure(pageRequest.asType()));
+    }
+
+    private boolean isActivePageParam(VariableElement param) {
+        Types types = processingEnv.getTypeUtils();
+        TypeElement page = processingEnv.getElementUtils().getTypeElement("io.lighting.lumen.active.Page");
+        if (page == null) {
+            return false;
+        }
+        return types.isAssignable(types.erasure(param.asType()), types.erasure(page.asType()));
     }
 
     /**
@@ -628,24 +764,252 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     /**
      * 渲染执行逻辑的代码片段。
      */
-    private String renderExecution(ReturnKind kind, VariableElement rowMapperParam, String returnType) {
+    private String renderExecution(
+        ReturnDescriptor descriptor,
+        VariableElement rowMapperParam,
+        PageParam pageParam,
+        String returnType,
+        String templateRef
+    ) {
         StringBuilder builder = new StringBuilder();
-        switch (kind) {
+        switch (descriptor.kind()) {
             case LIST -> {
-                String mapperName = rowMapperParam.getSimpleName().toString();
+                String mapperExpr = resolveRowMapperExpression(descriptor, rowMapperParam);
                 builder.append("        return db.fetch(io.lighting.lumen.db.Query.of(rendered), ")
-                    .append(mapperName).append(");\n");
+                    .append(mapperExpr).append(");\n");
             }
-            case INT -> builder.append("        return db.execute(io.lighting.lumen.db.Command.of(rendered));\n");
-            case LONG -> builder.append("        return (long) db.execute(io.lighting.lumen.db.Command.of(rendered));\n");
+            case PAGE -> {
+                String mapperExpr = resolveRowMapperExpression(descriptor, rowMapperParam);
+                String pageParamName = pageParam == null ? "null" : pageParam.param().getSimpleName().toString();
+                String pageParamKind = pageParam == null ? "null" : "PageParamKind." + pageParam.kind().name();
+                builder.append("        io.lighting.lumen.template.SqlTemplatePageExpression pageExpression =\n")
+                    .append("            io.lighting.lumen.template.SqlTemplatePages.find(")
+                    .append(templateRef).append(");\n");
+                builder.append("        PageValues values = resolvePageValues(context, pageExpression, ")
+                    .append(pageParamName).append(", ").append(pageParamKind).append(");\n");
+                builder.append("        io.lighting.lumen.sql.RenderedSql paged = pageExpression == null\n")
+                    .append("            ? applyPagination(rendered, values.page(), values.pageSize())\n")
+                    .append("            : rendered;\n");
+                builder.append("        java.util.List<").append(descriptor.resultTypeName()).append("> items = ")
+                    .append("db.fetch(io.lighting.lumen.db.Query.of(paged), ").append(mapperExpr).append(");\n");
+                builder.append("        long total = values.searchCount()\n")
+                    .append("            ? fetchCount(renderCount(").append(templateRef).append(", bindings))\n")
+                    .append("            : io.lighting.lumen.page.PageResult.TOTAL_UNKNOWN;\n");
+                builder.append("        return new io.lighting.lumen.page.PageResult<>(items, ")
+                    .append("values.page(), values.pageSize(), total);\n");
+            }
+            case INT -> {
+                if (descriptor.selectLike()) {
+                    builder.append("        java.util.List<Integer> rows = db.fetch(")
+                        .append("io.lighting.lumen.db.Query.of(rendered), rs -> rs.getInt(1));\n");
+                    builder.append("        return rows.isEmpty() ? 0 : rows.get(0);\n");
+                } else {
+                    builder.append("        return db.execute(io.lighting.lumen.db.Command.of(rendered));\n");
+                }
+            }
+            case LONG -> {
+                if (descriptor.selectLike()) {
+                    builder.append("        java.util.List<Long> rows = db.fetch(")
+                        .append("io.lighting.lumen.db.Query.of(rendered), rs -> rs.getLong(1));\n");
+                    builder.append("        return rows.isEmpty() ? 0L : rows.get(0);\n");
+                } else {
+                    builder.append("        return (long) db.execute(io.lighting.lumen.db.Command.of(rendered));\n");
+                }
+            }
             case VOID -> builder.append("        db.execute(io.lighting.lumen.db.Command.of(rendered));\n");
             case RENDERED_SQL -> builder.append("        return rendered;\n");
             case QUERY -> builder.append("        return io.lighting.lumen.db.Query.of(rendered);\n");
             case COMMAND -> builder.append("        return io.lighting.lumen.db.Command.of(rendered);\n");
+            case SINGLE -> {
+                String mapperExpr = resolveRowMapperExpression(descriptor, rowMapperParam);
+                String listType = descriptor.resultTypeName() != null && !descriptor.primitiveReturn()
+                    ? "java.util.List<" + descriptor.resultTypeName() + ">"
+                    : "java.util.List<?>";
+                builder.append("        ").append(listType).append(" rows = db.fetch(")
+                    .append("io.lighting.lumen.db.Query.of(rendered), ").append(mapperExpr).append(");\n");
+                if (descriptor.primitiveReturn()) {
+                    builder.append("        if (rows.isEmpty()) {\n")
+                        .append("            throw new NullPointerException(\"No rows for primitive return type\");\n")
+                        .append("        }\n");
+                } else {
+                    builder.append("        if (rows.isEmpty()) {\n")
+                        .append("            return null;\n")
+                        .append("        }\n");
+                }
+                if (descriptor.primitiveReturn()) {
+                    builder.append("        return (").append(boxedTypeName(returnType)).append(") rows.get(0);\n");
+                } else {
+                    builder.append("        return (").append(returnType).append(") rows.get(0);\n");
+                }
+            }
             default -> builder.append("        throw new UnsupportedOperationException(\"Unsupported return type: ")
                 .append(returnType).append("\");\n");
         }
         return builder.toString();
+    }
+
+    private String resolveRowMapperExpression(ReturnDescriptor descriptor, VariableElement rowMapperParam) {
+        if (rowMapperParam != null) {
+            return rowMapperParam.getSimpleName().toString();
+        }
+        if (descriptor.resultTypeName() == null) {
+            return "null";
+        }
+        return "io.lighting.lumen.jdbc.RowMappers.auto(" + descriptor.resultTypeName() + ".class)";
+    }
+
+    private String boxedTypeName(String returnType) {
+        return switch (returnType) {
+            case "boolean" -> "java.lang.Boolean";
+            case "byte" -> "java.lang.Byte";
+            case "short" -> "java.lang.Short";
+            case "char" -> "java.lang.Character";
+            case "float" -> "java.lang.Float";
+            case "double" -> "java.lang.Double";
+            case "int" -> "java.lang.Integer";
+            case "long" -> "java.lang.Long";
+            default -> returnType;
+        };
+    }
+
+    private String renderPageHelpers() {
+        return """
+                private io.lighting.lumen.sql.RenderedSql renderCount(
+                    io.lighting.lumen.template.SqlTemplate template,
+                    io.lighting.lumen.sql.Bindings bindings
+                ) {
+                    io.lighting.lumen.template.TemplateContext countContext =
+                        new io.lighting.lumen.template.TemplateContext(
+                            bindings.asMap(),
+                            new NoPagingDialect(dialect),
+                            metaRegistry,
+                            entityNameResolver
+                        );
+                    io.lighting.lumen.sql.RenderedSql base = template.render(countContext);
+                    return io.lighting.lumen.page.PageSql.wrapCount(base);
+                }
+
+                private long fetchCount(io.lighting.lumen.sql.RenderedSql rendered) throws java.sql.SQLException {
+                    java.util.List<Long> rows =
+                        db.fetch(io.lighting.lumen.db.Query.of(rendered), rs -> rs.getLong(1));
+                    if (rows.isEmpty()) {
+                        return 0L;
+                    }
+                    return rows.get(0);
+                }
+
+                private io.lighting.lumen.sql.RenderedSql applyPagination(
+                    io.lighting.lumen.sql.RenderedSql rendered,
+                    int page,
+                    int pageSize
+                ) {
+                    io.lighting.lumen.sql.RenderedPagination pagination =
+                        dialect.renderPagination(page, pageSize, java.util.List.of());
+                    if (pagination.sqlFragment().isBlank()) {
+                        return rendered;
+                    }
+                    String baseSql = rendered.sql();
+                    String fragment = pagination.sqlFragment();
+                    String combined = combineSql(baseSql, fragment);
+                    java.util.List<io.lighting.lumen.sql.Bind> combinedBinds =
+                        new java.util.ArrayList<>(rendered.binds());
+                    combinedBinds.addAll(pagination.binds());
+                    return new io.lighting.lumen.sql.RenderedSql(combined, combinedBinds);
+                }
+
+                private String combineSql(String baseSql, String fragment) {
+                    if (baseSql == null || baseSql.isBlank()) {
+                        return fragment.trim();
+                    }
+                    String left = baseSql;
+                    String right = fragment;
+                    if (Character.isWhitespace(left.charAt(left.length() - 1))) {
+                        right = right.stripLeading();
+                    } else if (!right.isBlank() && !Character.isWhitespace(right.charAt(0))) {
+                        left = left + " ";
+                    }
+                    return left + right;
+                }
+
+                private PageValues resolvePageValues(
+                    io.lighting.lumen.template.TemplateContext context,
+                    io.lighting.lumen.template.SqlTemplatePageExpression pageExpression,
+                    Object pageParam,
+                    PageParamKind kind
+                ) {
+                    PageValues paramValues = null;
+                    if (kind != null) {
+                        if (pageParam == null) {
+                            throw new IllegalArgumentException("Page parameter must not be null");
+                        }
+                        if (kind == PageParamKind.REQUEST) {
+                            io.lighting.lumen.page.PageRequest request =
+                                (io.lighting.lumen.page.PageRequest) pageParam;
+                            paramValues = new PageValues(request.page(), request.pageSize(), request.searchCount());
+                        } else if (kind == PageParamKind.ACTIVE) {
+                            io.lighting.lumen.active.Page page = (io.lighting.lumen.active.Page) pageParam;
+                            paramValues = new PageValues(page.page(), page.pageSize(), true);
+                        } else {
+                            throw new IllegalStateException("Unsupported page parameter kind: " + kind);
+                        }
+                    }
+                    if (pageExpression != null) {
+                        int page = pageExpression.page(context);
+                        int pageSize = pageExpression.pageSize(context);
+                        boolean searchCount = paramValues == null || paramValues.searchCount();
+                        return new PageValues(page, pageSize, searchCount);
+                    }
+                    if (paramValues != null) {
+                        return paramValues;
+                    }
+                    throw new IllegalStateException(
+                        "@page is required for PageResult return types unless a PageRequest/Page parameter is present");
+                }
+
+                private enum PageParamKind {
+                    REQUEST,
+                    ACTIVE
+                }
+
+                private record PageValues(int page, int pageSize, boolean searchCount) {
+                }
+
+                private static final class NoPagingDialect implements io.lighting.lumen.sql.Dialect {
+                    private final io.lighting.lumen.sql.Dialect delegate;
+
+                    private NoPagingDialect(io.lighting.lumen.sql.Dialect delegate) {
+                        this.delegate = java.util.Objects.requireNonNull(delegate, "delegate");
+                    }
+
+                    @Override
+                    public String id() {
+                        return delegate.id();
+                    }
+
+                    @Override
+                    public String quoteIdent(String ident) {
+                        return delegate.quoteIdent(ident);
+                    }
+
+                    @Override
+                    public io.lighting.lumen.sql.RenderedPagination renderPagination(
+                        int page,
+                        int pageSize,
+                        java.util.List<io.lighting.lumen.sql.ast.OrderItem> orderBy
+                    ) {
+                        return new io.lighting.lumen.sql.RenderedPagination("", java.util.List.of());
+                    }
+
+                    @Override
+                    public io.lighting.lumen.sql.RenderedSql renderFunction(
+                        String name,
+                        java.util.List<io.lighting.lumen.sql.RenderedSql> args
+                    ) {
+                        return delegate.renderFunction(name, args);
+                    }
+                }
+
+            """;
     }
 
     /**
@@ -709,14 +1073,31 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     private record TemplateMethod(ExecutableElement method, String constantName, String template) {
     }
 
+    private record ReturnDescriptor(
+        ReturnKind kind,
+        String resultTypeName,
+        boolean selectLike,
+        boolean primitiveReturn
+    ) {
+    }
+
+    private record PageParam(VariableElement param, PageParamKind kind) {
+    }
+
+    private enum PageParamKind {
+        REQUEST,
+        ACTIVE
+    }
+
     private enum ReturnKind {
         LIST,
+        PAGE,
         INT,
         LONG,
         VOID,
         RENDERED_SQL,
         QUERY,
         COMMAND,
-        UNSUPPORTED
+        SINGLE
     }
 }

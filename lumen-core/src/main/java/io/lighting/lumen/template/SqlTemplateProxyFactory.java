@@ -207,7 +207,7 @@ public final class SqlTemplateProxyFactory {
         int rowMapperIndex,
         Class<?> resultType,
         boolean selectLike,
-        PageExpression pageExpression,
+        SqlTemplatePageExpression pageExpression,
         PageParam pageParam,
         String[] bindingNames,
         int[] bindingIndexes
@@ -405,8 +405,8 @@ public final class SqlTemplateProxyFactory {
         private PageValues resolvePageValues(TemplateContext context, Object[] args) {
             PageValues paramValues = pageParam == null ? null : pageParam.extract(args);
             if (pageExpression != null) {
-                int page = toInt(pageExpression.page().evaluate(context), "page");
-                int pageSize = toInt(pageExpression.pageSize().evaluate(context), "pageSize");
+                int page = pageExpression.page(context);
+                int pageSize = pageExpression.pageSize(context);
                 boolean searchCount = paramValues == null || paramValues.searchCount();
                 return new PageValues(page, pageSize, searchCount);
             }
@@ -447,20 +447,6 @@ public final class SqlTemplateProxyFactory {
             return left + right;
         }
 
-        private int toInt(Object value, String name) {
-            if (value instanceof Number number) {
-                return number.intValue();
-            }
-            if (value instanceof String str) {
-                try {
-                    return Integer.parseInt(str);
-                } catch (NumberFormatException ex) {
-                    throw new IllegalArgumentException("Invalid " + name + " value: " + value);
-                }
-            }
-            throw new IllegalArgumentException("Invalid " + name + " value: " + value);
-        }
-
         private static void validateThrows(Method method) {
             for (Class<?> ex : method.getExceptionTypes()) {
                 if (SQLException.class.isAssignableFrom(ex)) {
@@ -497,7 +483,7 @@ public final class SqlTemplateProxyFactory {
             }
             if (PageResult.class.isAssignableFrom(returnType)) {
                 Class<?> elementType = resolveElementType(method, "PageResult");
-                PageExpression pageExpression = findPageExpression(parsedTemplate.nodes());
+                SqlTemplatePageExpression pageExpression = SqlTemplatePages.find(parsedTemplate);
                 return new ReturnDescriptor(ReturnKind.PAGE, elementType, false, pageExpression);
             }
             if (List.class.isAssignableFrom(returnType)) {
@@ -544,29 +530,6 @@ public final class SqlTemplateProxyFactory {
                 Type raw = parameterized.getRawType();
                 if (raw instanceof Class<?> clazz) {
                     return clazz;
-                }
-            }
-            return null;
-        }
-
-        private static PageExpression findPageExpression(List<TemplateNode> nodes) {
-            for (TemplateNode node : nodes) {
-                if (node instanceof PageNode pageNode) {
-                    return new PageExpression(pageNode.page(), pageNode.pageSize());
-                }
-                // Recursively scan nested blocks for @page nodes.
-                PageExpression nested = null;
-                if (node instanceof IfNode ifNode) {
-                    nested = findPageExpression(ifNode.body());
-                } else if (node instanceof ForNode forNode) {
-                    nested = findPageExpression(forNode.body());
-                } else if (node instanceof ClauseNode clauseNode) {
-                    nested = findPageExpression(clauseNode.body());
-                } else if (node instanceof OrNode orNode) {
-                    nested = findPageExpression(orNode.body());
-                }
-                if (nested != null) {
-                    return nested;
                 }
             }
             return null;
@@ -650,11 +613,8 @@ public final class SqlTemplateProxyFactory {
             ReturnKind returnKind,
             Class<?> resultType,
             boolean selectLike,
-            PageExpression pageExpression
+            SqlTemplatePageExpression pageExpression
         ) {
-        }
-
-        private record PageExpression(TemplateExpression page, TemplateExpression pageSize) {
         }
 
         private record PageValues(int page, int pageSize, boolean searchCount) {
