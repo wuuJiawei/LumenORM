@@ -10,7 +10,7 @@ import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
@@ -95,7 +95,7 @@ class MysqlLambdaDslExampleTest {
     }
 
     private EntityMetaRegistry metaRegistry() {
-        return new ReflectionEntityMetaRegistry();
+        return new TestEntityMetaRegistry();
     }
 
     @Table(name = "orders")

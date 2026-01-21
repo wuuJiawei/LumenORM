@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.lighting.lumen.jdbc.JdbcExecutor;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
@@ -180,7 +180,7 @@ class DefaultDbTest {
             executor,
             renderer,
             dialect,
-            new ReflectionEntityMetaRegistry(),
+            new TestEntityMetaRegistry(),
             EntityNameResolvers.from(Map.of()),
             observers
         );

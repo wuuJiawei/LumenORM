@@ -25,15 +25,24 @@ import javax.tools.Diagnostic;
 /**
  * 实体元数据处理器。
  * <p>
- * 解析 {@link Table}/{@link Column}/{@link Id} 注解并生成 Q 类，
+ * 解析 {@link Table}/{@link Column}/{@link Id} 注解并生成 UserMeta 类，
  * 便于在 DSL 中安全引用表名与列名。
+ * <p>
+ * 生成的 UserMeta 类包含：
+ * <ul>
+ *   <li>列名字符串常量（如 {@code ID = "id"}）</li>
+ *   <li>DSL 列引用方法（如 {@code id()} 返回 {@code ColumnRef}）</li>
+ *   <li>默认表实例（{@code TABLE}，别名 "t"）</li>
+ *   <li>带别名的表实例（{@code as("alias")}）</li>
+ *   <li>表信息方法（{@code tableName()}, {@code columns()}）</li>
+ * </ul>
  */
 @SupportedAnnotationTypes("io.lighting.lumen.meta.Table")
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class EntityMetaProcessor extends AbstractProcessor {
 
     /**
-     * 处理入口：扫描 @Table 标注的类型并生成对应的 Q 类。
+     * 处理入口：扫描 @Table 标注的类型并生成对应的 UserMeta 类。
      * <p>
      * 若元素不符合约束，会在编译期输出错误并跳过该元素的生成。
      */
@@ -63,7 +72,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             if (!collectColumns(type, fieldToColumn, columns)) {
                 continue;
             }
-            generateQClass(type, tableName, fieldToColumn);
+            generateUserMetaClass(type, tableName, fieldToColumn);
         }
         return true;
     }
@@ -133,81 +142,200 @@ public final class EntityMetaProcessor extends AbstractProcessor {
     }
 
     /**
-     * 生成 Q 类源码。
+     * 生成 UserMeta 类源码。
      * <p>
-     * 生成内容包含：表常量、表别名、列访问方法等。
+     * 生成内容包含：
+     * <ul>
+     *   <li>列名字符串常量（如 {@code ID = "id"}）</li>
+     *   <li>DSL 列引用方法（如 {@code id()} 返回 {@code ColumnRef}）</li>
+     *   <li>默认表实例（{@code TABLE}）</li>
+     *   <li>带别名的表实例方法（{@code as(String alias)}）</li>
+     *   <li>表信息方法（{@code tableName()}, {@code columns()}）</li>
+     *   <li>内部类 {@code UserMetaTable}（支持别名的表实例）</li>
+     * </ul>
      */
-    private void generateQClass(TypeElement type, String tableName, Map<String, String> fieldToColumn) {
+    private void generateUserMetaClass(TypeElement type, String tableName, Map<String, String> fieldToColumn) {
         String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
-        String simpleName = "Q" + type.getSimpleName();
-        String qualifiedName = packageName.isEmpty() ? simpleName : packageName + "." + simpleName;
-        String constName = AptCodegenUtils.toConstantName(type.getSimpleName().toString());
-        String defaultAlias = defaultAlias(type.getSimpleName().toString());
-        StringBuilder columnsBuilder = new StringBuilder();
+        String entityName = type.getSimpleName().toString();
+        String metaClassName = entityName + "Meta";
+        String metaPackageName = packageName.isEmpty() ? metaClassName : packageName + ".meta." + metaClassName;
+        String constName = AptCodegenUtils.toConstantName(entityName);
+        String defaultAlias = defaultAlias(entityName);
+        
+        // 构建列名字符串常量
+        StringBuilder constantsBuilder = new StringBuilder();
         for (Map.Entry<String, String> entry : fieldToColumn.entrySet()) {
             String fieldName = entry.getKey();
             String columnName = entry.getValue();
-            columnsBuilder.append("""
-                    public io.lighting.lumen.dsl.ColumnRef %s() {
-                        return io.lighting.lumen.dsl.ColumnRef.of(alias, "%s");
-                    }
-
-                """.formatted(fieldName, AptCodegenUtils.escapeJava(columnName)));
+            String constFieldName = toConstantName(fieldName);
+            constantsBuilder.append("""
+                public static final String %s = "%s";
+                
+                """.formatted(constFieldName, AptCodegenUtils.escapeJava(columnName)));
         }
+        
+        // 构建列引用方法（静态方法）
+        StringBuilder staticMethodsBuilder = new StringBuilder();
+        for (Map.Entry<String, String> entry : fieldToColumn.entrySet()) {
+            String fieldName = entry.getKey();
+            String columnName = entry.getValue();
+            String methodName = toMethodName(fieldName);
+            staticMethodsBuilder.append("""
+                public static io.lighting.lumen.dsl.ColumnRef %s() {
+                    return io.lighting.lumen.dsl.ColumnRef.of("t", "%s");
+                }
+                
+                """.formatted(methodName, AptCodegenUtils.escapeJava(columnName)));
+        }
+        
+        // 构建 UserMetaTable 内部类的列方法
+        StringBuilder tableMethodsBuilder = new StringBuilder();
+        for (Map.Entry<String, String> entry : fieldToColumn.entrySet()) {
+            String fieldName = entry.getKey();
+            String columnName = entry.getValue();
+            String methodName = toMethodName(fieldName);
+            tableMethodsBuilder.append("""
+                public io.lighting.lumen.dsl.ColumnRef %s() {
+                    return io.lighting.lumen.dsl.ColumnRef.of(alias, "%s");
+                }
+                
+                """.formatted(methodName, AptCodegenUtils.escapeJava(columnName)));
+        }
+        
+        // 构建列名字符串集合
+        String columnsArray = fieldToColumn.values().stream()
+            .map(c -> "\"" + AptCodegenUtils.escapeJava(c) + "\"")
+            .collect(java.util.stream.Collectors.joining(", "));
+        
         StringBuilder content = new StringBuilder();
-        content.append(AptCodegenUtils.packageLine(packageName));
+        content.append(AptCodegenUtils.packageLine(packageName + ".meta"));
         content.append("""
+
+            /**
+             * APT 生成的实体元数据类。
+             * <p>
+             * 常量形式 - 直接获取列名字符串:
+             *   UserMeta.ID       → "id"
+             *   UserMeta.NAME     → "name"
+             *   UserMeta.STATUS   → "status"
+             * <p>
+             * 方法形式 - DSL 构建 (类型安全):
+             *   UserMeta.id()     → ColumnRef("t", "id")
+             *   UserMeta.name()   → ColumnRef("t", "name")
+             *   UserMeta.status() → ColumnRef("t", "status")
+             * <p>
+             * 表实例:
+             *   UserMeta.TABLE                → 别名 "t" 的表实例
+             *   UserMeta.TABLE.as("u")        → 别名 "u" 的表实例
+             * <p>
+             * 表信息:
+             *   UserMeta.tableName()  → 表名字符串
+             *   UserMeta.columns()    → 所有列名的集合
+             */
             @SuppressWarnings("unused")
             public final class %s {
-                public static final %s %s = new %s("%s", "%s");
+                // ========== 常量形式：列名字符串 ==========
+                %s
+                // ========== 方法形式：DSL 列引用 ==========
+                %s
+                // ========== 表实例 ==========
+                public static final %s TABLE = new %s("%s", "%s");
+                
+                public %s as(String alias) {
+                    return new %s("%s", alias);
+                }
+                
+                // ========== 表信息 ==========
+                public static String tableName() {
+                    return "%s";
+                }
+                
+                public static java.util.Set<String> columns() {
+                    return java.util.Set.of(%s);
+                }
+            }
+
+            /**
+             * 表实例（支持别名）。
+             * <p>
+             * 使用示例:
+             *   var u = UserMeta.TABLE.as("u");
+             *   dsl.select(u.id(), u.name()).from(u).where(u.name().eq("John"))
+             */
+            final class %s {
                 private final String table;
                 private final String alias;
-
-                private %s(String table, String alias) {
+                
+                %s(String table, String alias) {
                     this.table = table;
                     this.alias = alias;
                 }
-
-                public %s as(String alias) {
-                    if (alias == null || alias.isBlank()) {
-                        throw new IllegalArgumentException("alias must not be blank");
-                    }
-                    return new %s(this.table, alias);
-                }
-
+                
                 public String table() {
                     return table;
                 }
-
+                
                 public String alias() {
                     return alias;
                 }
-
-                public io.lighting.lumen.sql.ast.TableRef ref() {
-                    return new io.lighting.lumen.sql.ast.TableRef(table, alias);
-                }
-
+                
+                %s
+            }
             """.formatted(
-            simpleName,
-            simpleName,
-            constName,
-            simpleName,
+            metaClassName,
+            constantsBuilder.toString().trim(),
+            staticMethodsBuilder.toString().trim(),
+            metaClassName + "Table",
+            metaClassName + "Table",
             AptCodegenUtils.escapeJava(tableName),
             AptCodegenUtils.escapeJava(defaultAlias),
-            simpleName,
-            simpleName,
-            simpleName
+            metaClassName + "Table",
+            metaClassName + "Table",
+            AptCodegenUtils.escapeJava(tableName),
+            AptCodegenUtils.escapeJava(tableName),
+            columnsArray,
+            metaClassName + "Table",
+            metaClassName + "Table",
+            tableMethodsBuilder.toString().trim()
         ));
-        content.append(columnsBuilder);
-        content.append("}\n");
+        
         AptCodegenUtils.writeSourceFile(
             processingEnv.getFiler(),
             processingEnv.getMessager(),
             type,
-            qualifiedName,
+            metaPackageName,
             content.toString(),
-            "Failed to generate Q-class: "
+            "Failed to generate UserMeta class: "
         );
+    }
+
+    /**
+     * 将字段名转换为常量名（用于列名字符串常量）。
+     * 例如：createdAt → CREATED_AT
+     */
+    private String toConstantName(String fieldName) {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < fieldName.length(); i++) {
+            char c = fieldName.charAt(i);
+            if (Character.isUpperCase(c)) {
+                result.append('_').append(c);
+            } else {
+                result.append(Character.toUpperCase(c));
+            }
+        }
+        return result.toString();
+    }
+
+    /**
+     * 将字段名转换为方法名。
+     * 例如：createdAt → createdAt, status → status
+     */
+    private String toMethodName(String fieldName) {
+        if (fieldName.isEmpty()) {
+            return fieldName;
+        }
+        // 首字母小写
+        return Character.toLowerCase(fieldName.charAt(0)) + fieldName.substring(1);
     }
 
     /**

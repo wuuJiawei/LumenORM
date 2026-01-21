@@ -8,7 +8,7 @@ import io.lighting.lumen.db.Query;
 import io.lighting.lumen.db.SqlLog;
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.meta.EntityMetaRegistry;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
@@ -91,7 +91,7 @@ class SqlLogExampleTest {
         JdbcExecutor executor = new JdbcExecutor(dataSource);
         Dialect dialect = new NoQuoteDialect();
         SqlRenderer renderer = new SqlRenderer(dialect);
-        EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        EntityMetaRegistry metaRegistry = new TestEntityMetaRegistry();
         EntityNameResolver resolver = EntityNameResolvers.from(Map.of());
         SqlLog observer = SqlLog.builder()
             .mode(mode)

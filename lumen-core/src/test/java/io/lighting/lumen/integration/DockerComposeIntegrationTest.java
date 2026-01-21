@@ -9,7 +9,7 @@ import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
@@ -94,7 +94,7 @@ class DockerComposeIntegrationTest {
     }
 
     private void runDmlScenario(DefaultDb db, String generatedKeyColumn) throws SQLException {
-        Dsl dsl = new Dsl(new ReflectionEntityMetaRegistry());
+        Dsl dsl = new Dsl(new TestEntityMetaRegistry());
         io.lighting.lumen.dsl.Table orders = dsl.table(Order.class);
         SqlRenderer renderer = new SqlRenderer(new NoQuoteDialect());
 
@@ -129,7 +129,7 @@ class DockerComposeIntegrationTest {
     }
 
     private DefaultDb createDb(Connection connection) {
-        EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        EntityMetaRegistry metaRegistry = new TestEntityMetaRegistry();
         EntityNameResolver resolver = EntityNameResolvers.from(Map.of("Order", Order.class));
         Dialect dialect = new NoQuoteDialect();
         SqlRenderer renderer = new SqlRenderer(dialect);

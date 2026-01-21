@@ -3,8 +3,9 @@ package io.lighting.lumen.dsl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.lighting.lumen.meta.Column;
+import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
@@ -14,7 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class FluentDslTest {
-    private final ReflectionEntityMetaRegistry registry = new ReflectionEntityMetaRegistry();
+    private final EntityMetaRegistry registry = new TestEntityMetaRegistry();
     private final SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
 
     @Test
@@ -150,5 +151,33 @@ class FluentDslTest {
     private enum Sort {
         CREATED_DESC,
         ID_ASC
+    }
+
+    private static class TestEntityMetaRegistry implements EntityMetaRegistry {
+        @Override
+        public io.lighting.lumen.meta.EntityMeta metaOf(Class<?> entityType) {
+            if (entityType == OrderEntity.class) {
+                return new io.lighting.lumen.meta.EntityMeta(
+                    "orders",
+                    java.util.Map.of(
+                        "id", "id",
+                        "status", "status",
+                        "createdAt", "created_at",
+                        "customerId", "customer_id"
+                    ),
+                    new io.lighting.lumen.meta.IdMeta("id", "id", io.lighting.lumen.meta.IdStrategy.AUTO),
+                    null
+                );
+            }
+            if (entityType == CustomerEntity.class) {
+                return new io.lighting.lumen.meta.EntityMeta(
+                    "customers",
+                    java.util.Map.of("id", "id", "name", "name"),
+                    new io.lighting.lumen.meta.IdMeta("id", "id", io.lighting.lumen.meta.IdStrategy.AUTO),
+                    null
+                );
+            }
+            throw new IllegalArgumentException("Unknown entity: " + entityType);
+        }
     }
 }

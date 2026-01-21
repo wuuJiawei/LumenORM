@@ -13,7 +13,7 @@ import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
 import io.lighting.lumen.meta.IdStrategy;
 import io.lighting.lumen.meta.LogicDelete;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
@@ -39,7 +39,7 @@ class ActiveRecordTest {
             new io.lighting.lumen.jdbc.JdbcExecutor(dataSource),
             renderer,
             new NoQuoteDialect(),
-            new ReflectionEntityMetaRegistry(),
+            new TestEntityMetaRegistry(),
             name -> {
                 throw new IllegalArgumentException("Unknown entity type: " + name);
             }
@@ -47,7 +47,7 @@ class ActiveRecordTest {
         ActiveRecord.configure(ActiveRecordConfig.builder()
             .db(db)
             .renderer(renderer)
-            .metaRegistry(new ReflectionEntityMetaRegistry())
+            .metaRegistry(new TestEntityMetaRegistry())
             .build());
         prepareSchema();
     }
@@ -253,7 +253,7 @@ class ActiveRecordTest {
     }
 
     private int loadDeletedFlag(long id) throws SQLException {
-        Dsl dsl = new Dsl(new ReflectionEntityMetaRegistry());
+        Dsl dsl = new Dsl(new TestEntityMetaRegistry());
         io.lighting.lumen.dsl.Table table = dsl.table(OrderRecord.class);
         RenderedSql rendered = renderer.render(
             dsl.select(table.col("deleted").select())

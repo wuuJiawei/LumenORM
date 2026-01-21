@@ -6,7 +6,6 @@ import io.lighting.lumen.db.DefaultDb;
 import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.meta.EntityMetaRegistry;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.SqlRenderer;
 import io.lighting.lumen.sql.dialect.DialectResolver;
@@ -21,6 +20,21 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
 
+/**
+ * Lumen ORM 入口类。
+ * <p>
+ * 提供 DAO 获取、DSL 查询构建等核心功能。
+ * <p>
+ * 使用示例:
+ * <pre>{@code
+ * Lumen lumen = Lumen.builder()
+ *     .dataSource(dataSource)
+ *     .build();
+ *
+ * UserDao dao = lumen.dao(UserDao.class);
+ * User user = dao.findById(1L);
+ * }</pre>
+ */
 public final class Lumen {
     private final Db db;
     private final Dsl dsl;
@@ -46,10 +60,23 @@ public final class Lumen {
         this.renderer = renderer;
     }
 
+    /**
+     * 获取 Builder 实例。
+     */
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * 获取 DAO 实例。
+     * <p>
+     * 加载 APT 生成的 *_Impl 类，如果不存在则抛出异常。
+     *
+     * @param daoType DAO 接口类型
+     * @param <T> DAO 类型
+     * @return DAO 实例
+     * @throws IllegalStateException 如果 APT 未生成实现类
+     */
     public <T> T dao(Class<T> daoType) {
         Objects.requireNonNull(daoType, "daoType");
         if (!daoType.isInterface()) {
@@ -59,30 +86,14 @@ public final class Lumen {
         return daoType.cast(instance);
     }
 
-    public Dsl dsl() {
-        return dsl;
-    }
-
-    public Db db() {
-        return db;
-    }
-
-    public Dialect dialect() {
-        return dialect;
-    }
-
-    public EntityMetaRegistry metaRegistry() {
-        return metaRegistry;
-    }
-
-    public EntityNameResolver entityNameResolver() {
-        return entityNameResolver;
-    }
-
-    public SqlRenderer renderer() {
-        return renderer;
-    }
-
+    /**
+     * 创建 DAO 实例。
+     * <p>
+     * 直接加载 APT 生成的 *_Impl 类，不存在 fallback 机制。
+     *
+     * @param daoType DAO 接口类型
+     * @return DAO 实例
+     */
     private Object newDaoInstance(Class<?> daoType) {
         String implName = daoType.getName() + "_Impl";
         try {
@@ -106,25 +117,72 @@ public final class Lumen {
                 return ctor.newInstance(db, dialect, metaRegistry, entityNameResolver);
             }
         } catch (ClassNotFoundException ex) {
-            // Fallback to runtime SQL template proxy when no APT-generated implementation exists.
-            return io.lighting.lumen.template.SqlTemplateProxyFactory.create(
-                daoType,
-                db,
-                dialect,
-                metaRegistry,
-                entityNameResolver,
-                renderer
+            throw new IllegalStateException(
+                """
+                APT-generated implementation not found: %s
+
+                Please ensure annotation processing is enabled:
+                - Maven: Runs automatically (no extra config needed)
+                - IDE: Enable annotation processing in settings
+
+                Generated files location: target/generated-sources/annotations
+                """.formatted(implName), ex
             );
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to create DAO implementation: " + implName, ex);
         }
     }
 
+    /**
+     * 获取 DSL 查询构建器。
+     */
+    public Dsl dsl() {
+        return dsl;
+    }
+
+    /**
+     * 获取数据库操作接口。
+     */
+    public Db db() {
+        return db;
+    }
+
+    /**
+     * 获取 SQL 方言。
+     */
+    public Dialect dialect() {
+        return dialect;
+    }
+
+    /**
+     * 获取实体元数据注册表。
+     */
+    public EntityMetaRegistry metaRegistry() {
+        return metaRegistry;
+    }
+
+    /**
+     * 获取实体名称解析器。
+     */
+    public EntityNameResolver entityNameResolver() {
+        return entityNameResolver;
+    }
+
+    /**
+     * 获取 SQL 渲染器。
+     */
+    public SqlRenderer renderer() {
+        return renderer;
+    }
+
+    /**
+     * Lumen 构建器。
+     */
     public static final class Builder {
         private DataSource dataSource;
         private Db db;
         private Dialect dialect;
-        private EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        private EntityMetaRegistry metaRegistry;
         private EntityNameResolver entityNameResolver;
         private final Map<String, Class<?>> entityNameMappings = new LinkedHashMap<>();
         private SqlRenderer renderer;
@@ -134,29 +192,41 @@ public final class Lumen {
         private Builder() {
         }
 
+        /**
+         * 设置数据源。
+         */
         public Builder dataSource(DataSource dataSource) {
             this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
             return this;
         }
 
+        /**
+         * 设置自定义 Db 实现。
+         */
         public Builder db(Db db) {
             this.db = Objects.requireNonNull(db, "db");
             return this;
         }
 
-        // 方言：默认按 DataSource 自动识别，也可在这里显式覆盖。
+        /**
+         * 设置 SQL 方言。默认按 DataSource 自动识别。
+         */
         public Builder dialect(Dialect dialect) {
             this.dialect = Objects.requireNonNull(dialect, "dialect");
             return this;
         }
 
-        // 元数据注册表：从 @Table/@Column/@Id 中解析表和列。
+        /**
+         * 设置实体元数据注册表。
+         */
         public Builder metaRegistry(EntityMetaRegistry metaRegistry) {
             this.metaRegistry = Objects.requireNonNull(metaRegistry, "metaRegistry");
             return this;
         }
 
-        // 模板解析：默认扫描所有 @Table 实体用于短名映射。
+        /**
+         * 设置实体名称映射。
+         */
         public Builder entityNameMappings(Map<String, Class<?>> mappings) {
             Objects.requireNonNull(mappings, "mappings");
             for (Map.Entry<String, Class<?>> entry : mappings.entrySet()) {
@@ -165,6 +235,9 @@ public final class Lumen {
             return this;
         }
 
+        /**
+         * 添加实体名称映射。
+         */
         public Builder addEntityNameMapping(String name, Class<?> type) {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(type, "type");
@@ -175,27 +248,41 @@ public final class Lumen {
             return this;
         }
 
-        // 模板解析：高级用法，允许自定义解析策略（默认仍会提供 @Table 扫描作为兜底）。
+        /**
+         * 设置实体名称解析器。
+         */
         public Builder entityNameResolver(EntityNameResolver entityNameResolver) {
             this.entityNameResolver = Objects.requireNonNull(entityNameResolver, "entityNameResolver");
             return this;
         }
 
+        /**
+         * 设置 SQL 渲染器。
+         */
         public Builder renderer(SqlRenderer renderer) {
             this.renderer = Objects.requireNonNull(renderer, "renderer");
             return this;
         }
 
+        /**
+         * 设置数据库观察者（用于可观测性）。
+         */
         public Builder observers(List<DbObserver> observers) {
             this.observers = List.copyOf(Objects.requireNonNull(observers, "observers"));
             return this;
         }
 
+        /**
+         * 启用/禁用启动日志。
+         */
         public Builder startupLogEnabled(boolean enabled) {
             this.startupLogEnabled = enabled;
             return this;
         }
 
+        /**
+         * 构建 Lumen 实例。
+         */
         public Lumen build() {
             Dialect resolvedDialect = resolveDialect();
             EntityNameResolver resolvedEntityNameResolver = resolveEntityNameResolver();

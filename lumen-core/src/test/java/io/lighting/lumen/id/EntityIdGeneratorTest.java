@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.lighting.lumen.meta.Id;
 import io.lighting.lumen.meta.IdStrategy;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class EntityIdGeneratorTest {
     @Test
     void generatesUuidForStrategy() {
-        EntityIdGenerator generator = new EntityIdGenerator(new ReflectionEntityMetaRegistry());
+        EntityIdGenerator generator = new EntityIdGenerator(new TestEntityMetaRegistry());
 
         Optional<Object> id = generator.generate(UuidEntity.class);
 
@@ -25,7 +25,7 @@ class EntityIdGeneratorTest {
 
     @Test
     void returnsEmptyForAutoStrategy() {
-        EntityIdGenerator generator = new EntityIdGenerator(new ReflectionEntityMetaRegistry());
+        EntityIdGenerator generator = new EntityIdGenerator(new TestEntityMetaRegistry());
 
         Optional<Object> id = generator.generate(AutoEntity.class);
 
@@ -34,7 +34,7 @@ class EntityIdGeneratorTest {
 
     @Test
     void missingIdFails() {
-        EntityIdGenerator generator = new EntityIdGenerator(new ReflectionEntityMetaRegistry());
+        EntityIdGenerator generator = new EntityIdGenerator(new TestEntityMetaRegistry());
 
         assertThrows(IllegalArgumentException.class, () -> generator.generate(MissingId.class));
     }

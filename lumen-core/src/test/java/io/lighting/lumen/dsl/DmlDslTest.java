@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
@@ -14,7 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DmlDslTest {
-    private final ReflectionEntityMetaRegistry registry = new ReflectionEntityMetaRegistry();
+    private final TestEntityMetaRegistry registry = new TestEntityMetaRegistry();
     private final SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
 
     @Test

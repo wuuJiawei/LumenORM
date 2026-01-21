@@ -3,7 +3,7 @@ package io.lighting.lumen.template;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.sql.dialect.LimitOffsetDialect;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +18,7 @@ class TemplateExpressionParserTest {
             "filter", new Filter(List.of("a", "b"))
         ),
         new LimitOffsetDialect("\""),
-        new ReflectionEntityMetaRegistry(),
+        new TestEntityMetaRegistry(),
         EntityNameResolvers.from(Map.of())
     );
 

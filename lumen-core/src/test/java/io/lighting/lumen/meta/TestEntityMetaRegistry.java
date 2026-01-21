@@ -5,17 +5,23 @@ import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public final class ReflectionEntityMetaRegistry implements EntityMetaRegistry {
+/**
+ * 测试用的实体元数据注册表。
+ * <p>
+ * 注意：此类仅用于测试。生产代码应使用 APT 生成的 UserMeta 类。
+ */
+public final class TestEntityMetaRegistry implements EntityMetaRegistry {
     private final ConcurrentMap<Class<?>, EntityMeta> cache = new ConcurrentHashMap<>();
 
     @Override
     public EntityMeta metaOf(Class<?> entityType) {
-        Objects.requireNonNull(entityType, "entityType");
+        if (entityType == null) {
+            throw new IllegalArgumentException("entityType must not be null");
+        }
         return cache.computeIfAbsent(entityType, this::buildMeta);
     }
 

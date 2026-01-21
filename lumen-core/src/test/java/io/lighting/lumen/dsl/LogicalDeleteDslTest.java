@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.lighting.lumen.meta.Id;
 import io.lighting.lumen.meta.LogicDelete;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.ast.Expr;
 import io.lighting.lumen.sql.ast.UpdateItem;
@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class LogicalDeleteDslTest {
     @Test
     void buildsLogicalDeleteUpdate() {
-        Dsl dsl = new Dsl(new ReflectionEntityMetaRegistry());
+        Dsl dsl = new Dsl(new TestEntityMetaRegistry());
         io.lighting.lumen.dsl.Table orders = dsl.table(Order.class).as("o");
 
         UpdateStmt stmt = dsl.logicalDeleteFrom(orders)
@@ -32,7 +32,7 @@ class LogicalDeleteDslTest {
 
     @Test
     void exposesNotDeletedPredicate() {
-        Dsl dsl = new Dsl(new ReflectionEntityMetaRegistry());
+        Dsl dsl = new Dsl(new TestEntityMetaRegistry());
         io.lighting.lumen.dsl.Table orders = dsl.table(Order.class).as("o");
 
         Expr expr = orders.notDeleted();

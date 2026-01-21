@@ -37,6 +37,9 @@ import javax.tools.Diagnostic;
  *   <li>生成模板常量类（_SqlTemplates）与实现类（_Impl）。</li>
  *   <li>校验 {@link SqlConst} 标注的常量模板。</li>
  * </ul>
+ * <p>
+ * 注意：此处理器仅负责生成代码，不生成运行时代理。
+ * 生成的 *_Impl 类可直接使用，无需额外的动态代理。
  */
 @SupportedAnnotationTypes({
     "io.lighting.lumen.template.annotations.SqlTemplate",
@@ -396,7 +399,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
     }
 
     /**
-     * 校验方法必须声明在接口中。
+     * 校验模板必须声明在接口中。
      */
     private boolean validateEnclosingType(ExecutableElement method) {
         Element enclosing = method.getEnclosingElement();

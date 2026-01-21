@@ -10,7 +10,7 @@ import io.lighting.lumen.db.Query;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.Dialect;
@@ -166,7 +166,7 @@ class SqlAnnotationCrudExampleTest {
     }
 
     private RenderedSql render(String template, Bindings bindings) {
-        EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        EntityMetaRegistry metaRegistry = new TestEntityMetaRegistry();
         EntityNameResolver resolver = EntityNameResolvers.from(Map.of("Order", Order.class));
         TemplateContext context = new TemplateContext(bindings.asMap(), DIALECT, metaRegistry, resolver);
         return io.lighting.lumen.template.SqlTemplate.parse(template).render(context);
@@ -194,7 +194,7 @@ class SqlAnnotationCrudExampleTest {
     }
 
     private DefaultDb createDb(DataSource dataSource) {
-        EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        EntityMetaRegistry metaRegistry = new TestEntityMetaRegistry();
         EntityNameResolver resolver = EntityNameResolvers.from(Map.of("Order", Order.class));
         SqlRenderer renderer = new SqlRenderer(DIALECT);
         return new DefaultDb(

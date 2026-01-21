@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.RenderedSql;
 import io.lighting.lumen.sql.SqlRenderer;
@@ -65,7 +65,7 @@ class TransactionManagerTest {
             dataSource,
             renderer,
             dialect,
-            new ReflectionEntityMetaRegistry(),
+            new TestEntityMetaRegistry(),
             EntityNameResolvers.from(Map.of())
         );
     }

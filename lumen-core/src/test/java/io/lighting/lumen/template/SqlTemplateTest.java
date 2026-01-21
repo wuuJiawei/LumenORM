@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
@@ -16,7 +16,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SqlTemplateTest {
-    private final ReflectionEntityMetaRegistry registry = new ReflectionEntityMetaRegistry();
+    private final TestEntityMetaRegistry registry = new TestEntityMetaRegistry();
     private final LimitOffsetDialect dialect = new LimitOffsetDialect("\"");
 
     @Test

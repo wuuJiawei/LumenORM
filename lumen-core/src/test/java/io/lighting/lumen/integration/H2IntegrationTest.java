@@ -9,7 +9,7 @@ import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
+import io.lighting.lumen.meta.TestEntityMetaRegistry;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
@@ -70,7 +70,7 @@ class H2IntegrationTest {
         initializeSchema(dataSource);
         DefaultDb db = createDb(dataSource);
         SqlRenderer renderer = new SqlRenderer(new LimitOffsetDialect("\""));
-        Dsl dsl = new Dsl(new ReflectionEntityMetaRegistry());
+        Dsl dsl = new Dsl(new TestEntityMetaRegistry());
         io.lighting.lumen.dsl.Table orders = dsl.table(Order.class);
 
         InsertStmt insert = dsl.insertInto(orders)
@@ -145,7 +145,7 @@ class H2IntegrationTest {
     }
 
     private DefaultDb createDb(DataSource dataSource) {
-        EntityMetaRegistry metaRegistry = new ReflectionEntityMetaRegistry();
+        EntityMetaRegistry metaRegistry = new TestEntityMetaRegistry();
         EntityNameResolver resolver = EntityNameResolvers.from(Map.of("Order", Order.class));
         LimitOffsetDialect dialect = new LimitOffsetDialect("\"");
         SqlRenderer renderer = new SqlRenderer(dialect);
