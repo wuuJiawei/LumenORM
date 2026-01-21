@@ -2,6 +2,7 @@ package io.lighting.lumen.apt;
 
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.Id;
+import io.lighting.lumen.meta.LogicDelete;
 import io.lighting.lumen.meta.Table;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -25,7 +26,7 @@ import javax.tools.Diagnostic;
 /**
  * 实体元数据处理器。
  * <p>
- * 解析 {@link Table}/{@link Column}/{@link Id} 注解并生成 UserMeta 类，
+ * 解析 {@link Table}/{@link Column}/{@link Id}/{@link LogicDelete} 注解并生成 UserMeta 类，
  * 便于在 DSL 中安全引用表名与列名。
  * <p>
  * 生成的 UserMeta 类包含：
@@ -35,11 +36,14 @@ import javax.tools.Diagnostic;
  *   <li>默认表实例（{@code TABLE}，别名 "t"）</li>
  *   <li>带别名的表实例（{@code as("alias")}）</li>
  *   <li>表信息方法（{@code tableName()}, {@code columns()}）</li>
+ *   <li>逻辑删除支持（{@code deletedAt()}, {@code notDeleted()}）</li>
  * </ul>
  */
 @SupportedAnnotationTypes("io.lighting.lumen.meta.Table")
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
 public final class EntityMetaProcessor extends AbstractProcessor {
+
+    private String logicDeleteFieldName;
 
     /**
      * 处理入口：扫描 @Table 标注的类型并生成对应的 UserMeta 类。
@@ -69,6 +73,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             }
             Map<String, String> fieldToColumn = new LinkedHashMap<>();
             Set<String> columns = new LinkedHashSet<>();
+            logicDeleteFieldName = null;
             if (!collectColumns(type, fieldToColumn, columns)) {
                 continue;
             }
@@ -80,7 +85,8 @@ public final class EntityMetaProcessor extends AbstractProcessor {
     /**
      * 收集字段到列名的映射。
      * <p>
-     * 仅收集显式标注 {@link Column} 或 {@link Id} 的字段，跳过 static/transient 字段。
+     * 仅收集显式标注 {@link Column}、{@link Id} 或 {@link LogicDelete} 的字段，
+     * 跳过 static/transient 字段。
      * 同时校验字段名、列名是否重复。
      */
     private boolean collectColumns(
@@ -103,7 +109,8 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                 }
                 Column column = field.getAnnotation(Column.class);
                 Id id = field.getAnnotation(Id.class);
-                if (column == null && id == null) {
+                LogicDelete logicDelete = field.getAnnotation(LogicDelete.class);
+                if (column == null && id == null && logicDelete == null) {
                     continue;
                 }
                 String columnName = column != null ? column.name() : field.getSimpleName().toString();
@@ -121,6 +128,15 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                     return false;
                 }
                 fieldToColumn.put(fieldName, columnName);
+                
+                // 记录逻辑删除字段
+                if (logicDelete != null) {
+                    if (logicDeleteFieldName != null) {
+                        error(field, "Duplicate @LogicDelete annotation");
+                        return false;
+                    }
+                    logicDeleteFieldName = fieldName;
+                }
             }
             current = currentType.getSuperclass();
             if (isJavaLangObject(current)) {
@@ -202,6 +218,25 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                 """.formatted(methodName, AptCodegenUtils.escapeJava(columnName)));
         }
         
+        // 添加逻辑删除支持（静态方法）
+        StringBuilder staticLogicDeleteBuilder = new StringBuilder();
+        if (logicDeleteFieldName != null) {
+            String logicDeleteColumn = fieldToColumn.get(logicDeleteFieldName);
+            String deletedAtMethodName = toMethodName(logicDeleteFieldName);
+            
+            staticLogicDeleteBuilder.append("""
+                // ========== 逻辑删除支持 ==========
+                public static io.lighting.lumen.dsl.ColumnRef deletedAt() {
+                    return io.lighting.lumen.dsl.ColumnRef.of("t", "%s");
+                }
+                
+                public static io.lighting.lumen.sql.ast.Expr notDeleted() {
+                    return deletedAt().isNull();
+                }
+                
+                """.formatted(AptCodegenUtils.escapeJava(logicDeleteColumn)));
+        }
+        
         // 构建列名字符串集合
         String columnsArray = fieldToColumn.values().stream()
             .map(c -> "\"" + AptCodegenUtils.escapeJava(c) + "\"")
@@ -231,6 +266,10 @@ public final class EntityMetaProcessor extends AbstractProcessor {
              * 表信息:
              *   UserMeta.tableName()  → 表名字符串
              *   UserMeta.columns()    → 所有列名的集合
+             * <p>
+             * 逻辑删除（如果配置了 @LogicDelete）:
+             *   UserMeta.TABLE.deletedAt()  → 逻辑删除列引用
+             *   UserMeta.TABLE.notDeleted() → 未删除条件
              */
             @SuppressWarnings("unused")
             public final class %s {
@@ -253,6 +292,9 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                 public static java.util.Set<String> columns() {
                     return java.util.Set.of(%s);
                 }
+                
+                // ========== 逻辑删除支持 ==========
+                %s
             }
 
             /**
@@ -261,6 +303,10 @@ public final class EntityMetaProcessor extends AbstractProcessor {
              * 使用示例:
              *   var u = UserMeta.TABLE.as("u");
              *   dsl.select(u.id(), u.name()).from(u).where(u.name().eq("John"))
+             * <p>
+             * 逻辑删除示例:
+             *   var t = UserMeta.TABLE;
+             *   dsl.selectFrom(t).where(t.notDeleted())
              */
             final class %s {
                 private final String table;
@@ -280,6 +326,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                 }
                 
                 %s
+                %s
             }
             """.formatted(
             metaClassName,
@@ -294,6 +341,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             AptCodegenUtils.escapeJava(tableName),
             AptCodegenUtils.escapeJava(tableName),
             columnsArray,
+            staticLogicDeleteBuilder.toString().trim(),
             metaClassName + "Table",
             metaClassName + "Table",
             tableMethodsBuilder.toString().trim()
