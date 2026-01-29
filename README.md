@@ -255,7 +255,7 @@ LumenORM/
 **Spring Boot 3:**
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-spring-boot-starter</artifactId>
     <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -264,7 +264,7 @@ LumenORM/
 **Core Only:**
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-core</artifactId>
     <version>1.0-SNAPSHOT</version>
 </dependency>
