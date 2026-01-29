@@ -2,10 +2,10 @@ package io.lighting.lumen.dsl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.lighting.lumen.dsl.Table;
 import io.lighting.lumen.meta.Column;
 import io.lighting.lumen.meta.EntityMetaRegistry;
 import io.lighting.lumen.meta.Id;
-import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.sql.Bind;
 import io.lighting.lumen.sql.Bindings;
 import io.lighting.lumen.sql.RenderedSql;
