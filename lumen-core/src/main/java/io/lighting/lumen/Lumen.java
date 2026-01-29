@@ -118,7 +118,7 @@ public final class Lumen {
             }
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException(
-                """
+                String.format("""
                 APT-generated implementation not found: %s
 
                 Please ensure annotation processing is enabled:
@@ -126,7 +126,7 @@ public final class Lumen {
                 - IDE: Enable annotation processing in settings
 
                 Generated files location: target/generated-sources/annotations
-                """.formatted(implName), ex
+                """, implName), ex
             );
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to create DAO implementation: " + implName, ex);

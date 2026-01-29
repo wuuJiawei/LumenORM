@@ -40,7 +40,7 @@ import javax.tools.Diagnostic;
  * </ul>
  */
 @SupportedAnnotationTypes("io.lighting.lumen.meta.Table")
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public final class EntityMetaProcessor extends AbstractProcessor {
 
     private String logicDeleteFieldName;
@@ -184,10 +184,10 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             String fieldName = entry.getKey();
             String columnName = entry.getValue();
             String constFieldName = toConstantName(fieldName);
-            constantsBuilder.append("""
+            constantsBuilder.append(String.format("""
                 public static final String %s = "%s";
-                
-                """.formatted(constFieldName, AptCodegenUtils.escapeJava(columnName)));
+
+                """, constFieldName, AptCodegenUtils.escapeJava(columnName)));
         }
         
         // 构建列引用方法（静态方法）
@@ -196,12 +196,12 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             String fieldName = entry.getKey();
             String columnName = entry.getValue();
             String methodName = toMethodName(fieldName);
-            staticMethodsBuilder.append("""
+            staticMethodsBuilder.append(String.format("""
                 public static io.lighting.lumen.dsl.ColumnRef %s() {
                     return io.lighting.lumen.dsl.ColumnRef.of("t", "%s");
                 }
-                
-                """.formatted(methodName, AptCodegenUtils.escapeJava(columnName)));
+
+                """, methodName, AptCodegenUtils.escapeJava(columnName)));
         }
         
         // 构建 UserMetaTable 内部类的列方法
@@ -210,12 +210,12 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             String fieldName = entry.getKey();
             String columnName = entry.getValue();
             String methodName = toMethodName(fieldName);
-            tableMethodsBuilder.append("""
+            tableMethodsBuilder.append(String.format("""
                 public io.lighting.lumen.dsl.ColumnRef %s() {
                     return io.lighting.lumen.dsl.ColumnRef.of(alias, "%s");
                 }
-                
-                """.formatted(methodName, AptCodegenUtils.escapeJava(columnName)));
+
+                """, methodName, AptCodegenUtils.escapeJava(columnName)));
         }
         
         // 添加逻辑删除支持（静态方法）
@@ -224,7 +224,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
             String logicDeleteColumn = fieldToColumn.get(logicDeleteFieldName);
             String deletedAtMethodName = toMethodName(logicDeleteFieldName);
             
-            staticLogicDeleteBuilder.append("""
+            staticLogicDeleteBuilder.append(String.format("""
                 // ========== 逻辑删除支持 ==========
                 public static io.lighting.lumen.dsl.ColumnRef deletedAt() {
                     return io.lighting.lumen.dsl.ColumnRef.of("t", "%s");
@@ -234,7 +234,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                     return deletedAt().isNull();
                 }
                 
-                """.formatted(AptCodegenUtils.escapeJava(logicDeleteColumn)));
+                """, AptCodegenUtils.escapeJava(logicDeleteColumn)));
         }
         
         // 构建列名字符串集合
@@ -244,7 +244,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
         
         StringBuilder content = new StringBuilder();
         content.append(AptCodegenUtils.packageLine(packageName + ".meta"));
-        content.append("""
+        content.append(String.format("""
 
             /**
              * APT 生成的实体元数据类。
@@ -328,7 +328,7 @@ public final class EntityMetaProcessor extends AbstractProcessor {
                 %s
                 %s
             }
-            """.formatted(
+            """,
             metaClassName,
             constantsBuilder.toString().trim(),
             staticMethodsBuilder.toString().trim(),

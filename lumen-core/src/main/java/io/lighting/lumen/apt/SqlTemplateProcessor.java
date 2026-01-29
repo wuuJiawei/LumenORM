@@ -45,7 +45,7 @@ import javax.tools.Diagnostic;
     "io.lighting.lumen.template.annotations.SqlTemplate",
     "io.lighting.lumen.template.annotations.SqlConst"
 })
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public final class SqlTemplateProcessor extends AbstractProcessor {
     /**
      * 系统预留绑定名，供框架注入方言标识。
@@ -205,20 +205,20 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         String qualifiedName = packageName.isEmpty() ? simpleName : packageName + "." + simpleName;
         StringBuilder content = new StringBuilder();
         content.append(AptCodegenUtils.packageLine(packageName));
-        content.append("""
+        content.append(String.format("""
             @SuppressWarnings("unused")
             public final class %s {
                 private %s() {
                 }
 
-            """.formatted(simpleName, simpleName));
+            """, simpleName, simpleName));
         for (TemplateMethod method : methods) {
-            content.append("""
+            content.append(String.format("""
                     public static final String %s = "%s";
                     public static final io.lighting.lumen.template.SqlTemplate %s_TEMPLATE =
                         io.lighting.lumen.template.SqlTemplate.parse(%s);
 
-                """.formatted(
+                """,
                 method.constantName(),
                 AptCodegenUtils.escapeJava(method.template()),
                 method.constantName(),
@@ -250,7 +250,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         String targetType = type.getQualifiedName().toString() + typeParamsUse;
         StringBuilder content = new StringBuilder();
         content.append(AptCodegenUtils.packageLine(packageName));
-        content.append("""
+        content.append(String.format("""
             @SuppressWarnings("unused")
             public final class %s%s implements %s, io.lighting.lumen.dao.DaoContextProvider {
                 private final io.lighting.lumen.db.Db db;
@@ -295,7 +295,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                     return daoContext;
                 }
 
-            """.formatted(simpleName, typeParamsDecl, targetType, simpleName, simpleName));
+            """, simpleName, typeParamsDecl, targetType, simpleName, simpleName));
 
         String templatesClass = (packageName.isEmpty() ? "" : packageName + ".")
             + type.getSimpleName() + "_SqlTemplates";
@@ -316,7 +316,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                 throwsClause = " " + throwsClause;
             }
             String templateRef = templatesClass + "." + templateMethod.constantName() + "_TEMPLATE";
-            content.append("""
+            content.append(String.format("""
                     @Override
                     public %s%s %s(%s)%s {
                         io.lighting.lumen.sql.Bindings bindings = %s;
@@ -329,7 +329,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
                             );
                         io.lighting.lumen.sql.RenderedSql rendered =
                             %s.%s_TEMPLATE.render(context);
-            """.formatted(
+            """,
                 methodTypeParams,
                 returnType,
                 method.getSimpleName(),
@@ -1069,7 +1069,7 @@ public final class SqlTemplateProcessor extends AbstractProcessor {
         if (bounds.size() != 1) {
             return false;
         }
-        TypeMirror bound = bounds.getFirst();
+        TypeMirror bound = bounds.get(0);
         return isSameType(bound, "java.lang.Object");
     }
 
