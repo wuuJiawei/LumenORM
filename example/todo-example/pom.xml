@@ -64,13 +64,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>io.lighting</groupId>
-                            <artifactId>lumen-core</artifactId>
-                            <version>${project.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
+                    <proc>none</proc>
                 </configuration>
             </plugin>
             <plugin>

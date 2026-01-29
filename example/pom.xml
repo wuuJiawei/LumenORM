@@ -16,5 +16,6 @@
     <modules>
         <module>core-example</module>
         <module>todo-example</module>
+        <module>pet-store</module>
     </modules>
 </project>
