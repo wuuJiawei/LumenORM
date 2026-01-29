@@ -7,7 +7,7 @@
     <parent>
         <groupId>pub.lighting</groupId>
         <artifactId>LumenORM</artifactId>
-        <version>0.9.1</version>
+        <version>0.9.2</version>
     </parent>
 
     <artifactId>lumen-solon-plugin</artifactId>

@@ -6,7 +6,7 @@
 
     <groupId>pub.lighting</groupId>
     <artifactId>LumenORM</artifactId>
-    <version>0.9.1</version>
+    <version>0.9.2</version>
     <packaging>pom</packaging>
     <name>LumenORM</name>
     <description>A lightweight SQL-First ORM for Java with interface-based SQL, fluent DSL, and text block templates.</description>
