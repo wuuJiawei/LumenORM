@@ -27,8 +27,15 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Integration tests requiring Docker containers.
+ * Run with: docker compose up -d
+ * Then: mvn test -Dtest=DockerComposeIntegrationTest
+ */
+@Disabled("Requires Docker containers. Run 'docker compose up -d' first, then re-enable.")
 class DockerComposeIntegrationTest {
     private static final DbConfig MYSQL = new DbConfig(
         "jdbc:mysql://localhost:3307/lumen",

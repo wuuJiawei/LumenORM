@@ -4,6 +4,8 @@ import io.lighting.lumen.Lumen;
 import io.lighting.lumen.db.Command;
 import io.lighting.lumen.db.Db;
 import io.lighting.lumen.meta.Column;
+import io.lighting.lumen.meta.Id;
+import io.lighting.lumen.meta.IdStrategy;
 import io.lighting.lumen.meta.Table;
 import io.lighting.lumen.page.PageRequest;
 import io.lighting.lumen.page.PageResult;
@@ -119,6 +121,7 @@ class DbDslTest {
 
     @Table(name = "ORDERS")
     private static final class OrderEntity {
+        @Id(strategy = IdStrategy.AUTO)
         @Column(name = "ID")
         private Long id;
 
@@ -146,6 +149,7 @@ class DbDslTest {
 
     @Table(name = "P_ORDERS")
     private static final class POrderEntity {
+        @Id(strategy = IdStrategy.AUTO)
         @Column(name = "ID")
         private Long id;
 

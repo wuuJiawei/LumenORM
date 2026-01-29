@@ -170,11 +170,11 @@ class ActiveRecordTest {
         item.insert();
 
         ActiveQuery<OrderRecord> query = Model.of(OrderRecord.class);
-        io.lighting.lumen.dsl.Table orders = query.table();
+        io.lighting.lumen.dsl.Table orders = query.table().as("orders");
         io.lighting.lumen.dsl.Table items = query.table(OrderItemRecord.class).as("oi");
         List<OrderRecord> rows = query
-            .select(orders.col(OrderRecord::id), orders.col(OrderRecord::status), items.col("sku"))
-            .leftJoin(items).on(items.col("orderId").eq(orders.col(OrderRecord::id)))
+            .select(orders.col(OrderRecord::id), orders.col(OrderRecord::status), items.col(OrderItemRecord::sku))
+            .leftJoin(items).on(items.col(OrderItemRecord::orderId).eq(orders.col(OrderRecord::id)))
             .where(orders.col(OrderRecord::id)).eq(order.id)
             .objList();
         assertEquals(1, rows.size());
@@ -385,6 +385,10 @@ class ActiveRecordTest {
 
         public Long orderId() {
             return orderId;
+        }
+
+        public String sku() {
+            return sku;
         }
     }
 
