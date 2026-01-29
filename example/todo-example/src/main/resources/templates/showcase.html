@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LumenORM Showcase - DSL vs Template</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600&family=Space+Grotesk:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --ink: #0b0b10;
+            --muted: #5b5f6b;
+            --card: #ffffff;
+            --accent: #6366f1;
+            --accent-soft: rgba(99, 102, 241, 0.12);
+            --accent-alt: #10b981;
+            --accent-alt-soft: rgba(16, 185, 129, 0.12);
+            --line: rgba(15, 15, 30, 0.12);
+            --bg-top: #f8f9ff;
+            --bg-bottom: #f0f4f8;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            color: var(--ink);
+            background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 48px 24px 32px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-family: "Playfair Display", serif;
+            font-size: clamp(2rem, 4vw, 2.5rem);
+            margin: 0 0 12px;
+        }
+
+        header p {
+            margin: 0 auto;
+            max-width: 600px;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 64px;
+        }
+
+        .nav-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .nav-link {
+            padding: 10px 20px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: var(--muted);
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link.active {
+            background: var(--ink);
+            color: #fff;
+        }
+
+        .nav-link:hover:not(.active) {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .approach-card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 28px;
+            border: 1px solid var(--line);
+            box-shadow: 0 4px 20px rgba(9, 9, 14, 0.04);
+        }
+
+        .approach-card.dsl {
+            border-top: 4px solid var(--accent);
+        }
+
+        .approach-card.template {
+            border-top: 4px solid var(--accent-alt);
+        }
+
+        .approach-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .approach-badge {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .dsl .approach-badge {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .template .approach-badge {
+            background: var(--accent-alt-soft);
+            color: var(--accent-alt);
+        }
+
+        .approach-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .approach-desc {
+            color: var(--muted);
+            margin: 0 0 20px;
+            line-height: 1.5;
+        }
+
+        .code-block {
+            background: #1e1e2e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #cdd6f4;
+            white-space: pre-wrap;
+        }
+
+        .code-block .keyword {
+            color: #cba6f7;
+        }
+
+        .code-block .string {
+            color: #a6e3a1;
+        }
+
+        .code-block .comment {
+            color: #6c7086;
+        }
+
+        .code-block .function {
+            color: #89b4fa;
+        }
+
+        .binds-section {
+            background: rgba(99, 102, 241, 0.06);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .binds-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin: 0 0 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .bind-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+            color: var(--muted);
+        }
+
+        .bind-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .bind-marker {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .benefits-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .benefits-list li::before {
+            content: "✓";
+            color: var(--accent-alt);
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .info-box {
+            background: rgba(99, 102, 241, 0.06);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 32px;
+        }
+
+        .info-box h3 {
+            margin: 0 0 12px;
+            font-size: 1rem;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .info-box code {
+            background: rgba(99, 102, 241, 0.12);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 480px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>LumenORM Query Showcase</h1>
+    <p>Two ways to build SQL queries: Fluent DSL for type-safety, or Text Block Templates for native SQL feel.</p>
+</header>
+
+<main>
+    <div class="nav-bar">
+        <a href="/" class="nav-link">Todo App</a>
+        <a href="/showcase" class="nav-link active">DSL vs Template</a>
+    </div>
+
+    <div class="comparison">
+        <!-- DSL Approach -->
+        <section class="approach-card dsl">
+            <div class="approach-header">
+                <span class="approach-badge">Type-Safe</span>
+                <h2 class="approach-title" th:text="${dslExample.title}">DSL Approach</h2>
+            </div>
+            <p class="approach-desc" th:text="${dslExample.description}">Build queries programmatically with fluent API.</p>
+
+            <div class="binds-section">
+                <div class="binds-title">DSL Code</div>
+                <div class="code-block">
+                    <pre th:text="${dslExample.code}">// Code here</pre>
+                </div>
+            </div>
+
+            <div class="binds-section">
+                <div class="binds-title">Generated SQL</div>
+                <div class="code-block" style="background: #2d2d3a; margin: 0;">
+                    <pre th:text="${dslExample.generatedSql}" style="color: #a6adc8;">SELECT ...</pre>
+                </div>
+            </div>
+
+            <div class="binds-section">
+                <div class="binds-title">Bound Parameters</div>
+                <th:block th:each="bind : ${dslExample.binds}">
+                    <div class="bind-item">
+                        <span class="bind-marker">?</span>
+                        <span th:text="${bind}">value</span>
+                    </div>
+                </th:block>
+            </div>
+
+            <ul class="benefits-list">
+                <li th:each="benefit : ${dslExample.benefits}" th:text="${benefit}">Type-safe</li>
+            </ul>
+        </section>
+
+        <!-- Template Approach -->
+        <section class="approach-card template">
+            <div class="approach-header">
+                <span class="approach-badge">Native SQL</span>
+                <h2 class="approach-title" th:text="${templateExample.title}">Template Approach</h2>
+            </div>
+            <p class="approach-desc" th:text="${templateExample.description}">Write SQL directly with embedded directives.</p>
+
+            <div class="binds-section">
+                <div class="binds-title">Template Code</div>
+                <div class="code-block">
+                    <pre th:text="${templateExample.code}">// Code here</pre>
+                </div>
+            </div>
+
+            <div class="binds-section">
+                <div class="binds-title">Generated SQL</div>
+                <div class="code-block" style="background: #2d2d3a; margin: 0;">
+                    <pre th:text="${templateExample.generatedSql}" style="color: #a6adc8;">SELECT ...</pre>
+                </div>
+            </div>
+
+            <div class="binds-section">
+                <div class="binds-title">Bound Parameters</div>
+                <th:block th:each="bind : ${templateExample.binds}">
+                    <div class="bind-item">
+                        <span class="bind-marker">?</span>
+                        <span th:text="${bind}">value</span>
+                    </div>
+                </th:block>
+            </div>
+
+            <ul class="benefits-list">
+                <li th:each="benefit : ${templateExample.benefits}" th:text="${benefit}">Native SQL</li>
+            </ul>
+        </section>
+    </div>
+
+    <div class="info-box">
+        <h3>Choose Your Style</h3>
+        <p>
+            <strong>Use DSL</strong> when you want compile-time safety, IDE refactoring support, and type-safe query building.
+            Perfect for applications where maintainability and refactoring are priorities.<br><br>
+            <strong>Use Templates</strong> when you have complex existing SQL, need full SQL expressiveness (window functions, CTEs),
+            or are migrating from MyBatis. Templates also support dynamic directives like <code>@if</code>, <code>@for</code>, and <code>@where</code>.
+        </p>
+    </div>
+</main>
+</body>
+</html>
