@@ -7,24 +7,53 @@
 
 ## 概述
 
-LumenORM 是一款轻量级的 SQL-First Java ORM，支持双查询入口：
+LumenORM 是一款轻量级的 SQL-First Java ORM，支持**三种查询入口**：
 
-- **Fluent DSL** - 类型安全的查询构建器
+- **接口定义 SQL** - 通过 `@SqlTemplate` 在接口中定义 SQL，编译时验证
+- **Fluent DSL** - 基于 Lambda 的类型安全查询构建器
 - **Text Block Templates** - 原生 SQL 动态模板
 
 **无外部 ORM 依赖。** 仅依赖 JDBC。
 
+## 为什么选择 LumenORM？
+
+```java
+// 在接口中定义 SQL - 编译时验证！
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        ORDER BY price DESC
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+
+    // 支持内置函数 #{now()}、#{uuid()} 等
+    @SqlTemplate("""
+        INSERT INTO pets (name, species, price, created_at)
+        VALUES (#{name}, #{species}, #{price}, #{now()})
+        """)
+    void insert(Pet pet);
+}
+
+// 使用 - 直接调用方法即可！
+List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+```
+
+没有 XML。没有字符串拼接。**纯 SQL 在 Java 中。**
+
 ## 特性
 
-- 双查询入口 (DSL + 模板)
-- 基于 Lambda 引用的类型安全 DSL
-- 模板指令 (@if, @for, @where, @in, @page, @orderBy)
+- 接口定义 SQL + `@SqlTemplate` + 编译时验证
+- 内置模板函数 (`#{now()}`、`#{uuid()}`、`#{random()}`)
+- 基于 Lambda 的类型安全 Fluent DSL
+- 自定义模板函数 `TemplateFunction`
+- 三种查询入口 (接口 + DSL + 模板)
 - 实体元数据 (反射或 APT 生成)
-- 逻辑删除支持
-- Active Record 模式
-- 批量操作
-- Spring Boot 3/4 集成
-- Solon 框架集成
+- 逻辑删除、Active Record、批量操作
+- Spring Boot 3/4 & Solon 集成
 - 最小依赖
 
 ## 快速开始
@@ -39,9 +68,30 @@ mvn -pl example/todo-example spring-boot:run  # http://localhost:8080
 mvn -pl example/pet-store spring-boot:run     # http://localhost:8081
 ```
 
-## 两种查询方式
+## 三种查询方式
 
-### 1. Fluent DSL (类型安全)
+### 1. 接口定义 SQL (编译时验证)
+
+```java
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+}
+
+// Spring 注入 - 直接使用！
+@Autowired
+PetRepository petRepository;
+
+List<Pet> pets = petRepository.findAvailableBySpecies("cat");
+```
+
+### 2. Fluent DSL (类型安全)
 
 ```java
 var t = dsl.table(Pet.class).as("p");
@@ -60,7 +110,7 @@ SelectStmt stmt = dsl.select(
 List<Pet> pets = db.fetch(Query.of(stmt, Bindings.empty()), Pet.class);
 ```
 
-### 2. Text Block Templates (原生 SQL)
+### 3. Text Block Templates (原生 SQL)
 
 ```java
 String sql = """
@@ -73,37 +123,32 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## 实体定义
+## 模板函数
+
+`@SqlTemplate` 中可用的内置函数：
 
 ```java
-@Table(name = "pets")
-public class Pet {
+@SqlTemplate("""
+    INSERT INTO pets (id, name, created_at, track_id)
+    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    """)
+void insert(Pet pet);
 
-    @Id
-    @Column(name = "id")
-    private Long id;
-
-    @Column(name = "name")
-    private String name;
-
-    @Column(name = "species")
-    private String species;
-
-    @Column(name = "price")
-    private BigDecimal price;
-
-    @Column(name = "available")
-    private Boolean available;
-}
+// 自定义函数
+@SqlTemplate("""
+    SELECT * FROM pets
+    WHERE name LIKE #{like(#{name})}
+    """)
+List<Pet> searchByName(String name);
 ```
 
 ## 文档
 
 - [快速开始](docs/quick-start.md) - 5 分钟入门
+- [APT 指南](docs/apt-guide.md) - 接口定义 SQL 与 @SqlTemplate
 - [DSL 指南](docs/dsl-guide.md) - 类型安全查询构建
 - [模板指南](docs/template-guide.md) - SQL 文本块模式
 - [实体定义](docs/entity-definition.md) - 注解参考
-- [APT 指南](docs/apt-guide.md) - 编译时验证
 - [逻辑删除](docs/logical-delete.md) - 软删除支持
 - [事务管理](docs/transactions.md) - 事务管理
 - [批量操作](docs/batch-operations.md) - 批量插入/更新

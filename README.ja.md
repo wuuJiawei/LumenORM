@@ -7,24 +7,53 @@ MyBatis の XML が好きじゃない？Java 開発者の新しい選択肢。
 
 ## 概要
 
-LumenORM は、二つのクエリエントリポイントを持つ軽量な SQL-First Java ORM です：
+LumenORM は、**三つのクエリエントリポイント**を持つ軽量な SQL-First Java ORM です：
 
-- **Fluent DSL** - 型安全なクエリビルダー
+- **インターフェース SQL** - `@SqlTemplate` でインターフェースに SQL を定義、コンパイル時検証
+- **Fluent DSL** - Lambda 参照による型安全なクエリビルダー
 - **Text Block Templates** - ネイティブ SQL 動的テンプレート
 
 **外部 ORM 依存なし。** JDBC のみ。
 
+## なぜ LumenORM ？
+
+```java
+// インターフェースに SQL を定義 - コンパイル時に検証！
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        ORDER BY price DESC
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+
+    // ビルトイン関数 #{now()}、#{uuid()} など対応
+    @SqlTemplate("""
+        INSERT INTO pets (name, species, price, created_at)
+        VALUES (#{name}, #{species}, #{price}, #{now()})
+        """)
+    void insert(Pet pet);
+}
+
+// 使い方 - メソッドを呼ぶだけ！
+List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+```
+
+XML なし。文字列連結なし。**Java 内で純粋な SQL。**
+
 ## 機能
 
-- 二つのクエリエントリポイント (DSL + テンプレート)
-- Lambda 参照による型安全な DSL
-- テンプレートディレクティブ (@if, @for, @where, @in, @page, @orderBy)
+- インターフェース SQL + `@SqlTemplate` + コンパイル時検証
+- ビルトイン SQL 関数 (`#{now()}`、`#{uuid()}`、`#{random()}`)
+- Lambda 参照による型安全な Fluent DSL
+- カスタムテンプレート関数 `TemplateFunction`
+- 三つのクエリエントリポイント (インターフェース + DSL + テンプレート)
 - エンティティメタデータ (リフレクションまたは APT 生成)
-- 論理削除サポート
-- Active Record パターン
-- バッチ操作
-- Spring Boot 3/4 連携
-- Solon フレームワーク連携
+- 論理削除、Active Record、バッチ操作
+- Spring Boot 3/4 & Solon 連携
 - 最小依存
 
 ## クイックスタート
@@ -39,9 +68,30 @@ mvn -pl example/todo-example spring-boot:run  # http://localhost:8080
 mvn -pl example/pet-store spring-boot:run     # http://localhost:8081
 ```
 
-## 二つのクエリ方法
+## 三つのクエリ方法
 
-### 1. Fluent DSL (型安全)
+### 1. インターフェース SQL (コンパイル時検証)
+
+```java
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+}
+
+// Spring インジェクション - そのまま使用！
+@Autowired
+PetRepository petRepository;
+
+List<Pet> pets = petRepository.findAvailableBySpecies("cat");
+```
+
+### 2. Fluent DSL (型安全)
 
 ```java
 var t = dsl.table(Pet.class).as("p");
@@ -60,7 +110,7 @@ SelectStmt stmt = dsl.select(
 List<Pet> pets = db.fetch(Query.of(stmt, Bindings.empty()), Pet.class);
 ```
 
-### 2. Text Block Templates (ネイティブ SQL)
+### 3. Text Block Templates (ネイティブ SQL)
 
 ```java
 String sql = """
@@ -73,37 +123,32 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## エンティティ定義
+## テンプレート関数
+
+`@SqlTemplate` で使用可能なビルトイン関数：
 
 ```java
-@Table(name = "pets")
-public class Pet {
+@SqlTemplate("""
+    INSERT INTO pets (id, name, created_at, track_id)
+    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    """)
+void insert(Pet pet);
 
-    @Id
-    @Column(name = "id")
-    private Long id;
-
-    @Column(name = "name")
-    private String name;
-
-    @Column(name = "species")
-    private String species;
-
-    @Column(name = "price")
-    private BigDecimal price;
-
-    @Column(name = "available")
-    private Boolean available;
-}
+// カスタム関数
+@SqlTemplate("""
+    SELECT * FROM pets
+    WHERE name LIKE #{like(#{name})}
+    """)
+List<Pet> searchByName(String name);
 ```
 
 ## ドキュメント
 
 - [クイックスタート](docs/quick-start.md) - 5 分で始める
+- [APT ガイド](docs/apt-guide.md) - インターフェース SQL と @SqlTemplate
 - [DSL ガイド](docs/dsl-guide.md) - 型安全クエリビルダー
 - [テンプレートガイド](docs/template-guide.md) - SQL テキストブロックパターン
 - [エンティティ定義](docs/entity-definition.md) - アノテーションリファレンス
-- [APT ガイド](docs/apt-guide.md) - コンパイル時検証
 - [論理削除](docs/logical-delete.md) - ソフト削除サポート
 - [トランザクション](docs/transactions.md) - トランザクション管理
 - [バッチ操作](docs/batch-operations.md) - 一括挿入/更新

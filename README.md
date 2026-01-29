@@ -7,25 +7,54 @@ Love SQL, hate XML? A fresh choice for Java developers.
 
 ## Overview
 
-LumenORM is a lightweight SQL-First ORM for Java with dual query entry points:
+LumenORM is a lightweight SQL-First ORM for Java with **three query entry points**:
 
-- **Fluent DSL** - Type-safe query builder
+- **Interface-based SQL** - Define SQL in interfaces with `@SqlTemplate`, validated at compile-time
+- **Fluent DSL** - Type-safe query builder with lambda references
 - **Text Block Templates** - Native SQL with dynamic directives
 
 **No external ORM dependencies.** Just JDBC.
 
+## Why LumenORM?
+
+```java
+// Define SQL in your interface - validated at compile-time!
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        ORDER BY price DESC
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+
+    // Built-in functions like #{now()}, #{uuid()} supported
+    @SqlTemplate("""
+        INSERT INTO pets (name, species, price, created_at)
+        VALUES (#{name}, #{species}, #{price}, #{now()})
+        """)
+    void insert(Pet pet);
+}
+
+// Usage - just call the method!
+List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+```
+
+No XML. No string concatenation. **Pure SQL in Java.**
+
 ## Features
 
-- Dual Query Entry Points (DSL + Templates)
-- Type-Safe DSL with Lambda References
-- Template Directives (@if, @for, @where, @in, @page, @orderBy)
-- Entity Metadata (Reflection or APT-generated)
-- Logical Deletion Support
-- Active Record Pattern
-- Batch Operations
-- Spring Boot 3/4 Integration
-- Solon Framework Integration
-- Minimal Dependencies
+- Interface-based SQL with `@SqlTemplate` and compile-time validation
+- Built-in template functions (`#{now()}`, `#{uuid()}`, `#{random()}`)
+- Type-safe Fluent DSL with lambda references
+- Custom template functions via `TemplateFunction`
+- Dual query entry points (Interface + DSL + Templates)
+- Entity metadata (Reflection or APT-generated)
+- Logical deletion, Active Record, Batch operations
+- Spring Boot 3/4 & Solon integration
+- Minimal dependencies
 
 ## Quick Start
 
@@ -39,9 +68,30 @@ mvn -pl example/todo-example spring-boot:run  # http://localhost:8080
 mvn -pl example/pet-store spring-boot:run     # http://localhost:8081
 ```
 
-## Two Ways to Query
+## Three Ways to Query
 
-### 1. Fluent DSL (Type-Safe)
+### 1. Interface-based SQL (Compile-time Validated)
+
+```java
+public interface PetRepository extends SqlTemplate {
+
+    @SqlTemplate("""
+        SELECT id, name, price
+        FROM pets
+        WHERE species = #{species}
+        AND available = true
+        """)
+    List<Pet> findAvailableBySpecies(String species);
+}
+
+// Spring injection - just use it!
+@Autowired
+PetRepository petRepository;
+
+List<Pet> pets = petRepository.findAvailableBySpecies("cat");
+```
+
+### 2. Fluent DSL (Type-Safe)
 
 ```java
 var t = dsl.table(Pet.class).as("p");
@@ -60,7 +110,7 @@ SelectStmt stmt = dsl.select(
 List<Pet> pets = db.fetch(Query.of(stmt, Bindings.empty()), Pet.class);
 ```
 
-### 2. Text Block Templates (Native SQL)
+### 3. Text Block Templates (Native SQL)
 
 ```java
 String sql = """
@@ -73,37 +123,32 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## Entity Definition
+## Template Functions
+
+Built-in functions available in `@SqlTemplate`:
 
 ```java
-@Table(name = "pets")
-public class Pet {
+@SqlTemplate("""
+    INSERT INTO pets (id, name, created_at, track_id)
+    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    """)
+void insert(Pet pet);
 
-    @Id
-    @Column(name = "id")
-    private Long id;
-
-    @Column(name = "name")
-    private String name;
-
-    @Column(name = "species")
-    private String species;
-
-    @Column(name = "price")
-    private BigDecimal price;
-
-    @Column(name = "available")
-    private Boolean available;
-}
+// Custom functions
+@SqlTemplate("""
+    SELECT * FROM pets
+    WHERE name LIKE #{like(#{name})}
+    """)
+List<Pet> searchByName(String name);
 ```
 
 ## Documentation
 
 - [Quick Start](docs/quick-start.md) - Get started in 5 minutes
+- [APT Guide](docs/apt-guide.md) - Interface-based SQL with @SqlTemplate
 - [DSL Guide](docs/dsl-guide.md) - Type-safe query building
 - [Template Guide](docs/template-guide.md) - SQL text block patterns
 - [Entity Definition](docs/entity-definition.md) - Annotations reference
-- [APT Guide](docs/apt-guide.md) - Compile-time validation
 - [Logical Delete](docs/logical-delete.md) - Soft delete support
 - [Transactions](docs/transactions.md) - Transaction management
 - [Batch Operations](docs/batch-operations.md) - Bulk inserts/updates
