@@ -1,6 +1,6 @@
 # LumenORM
 
-The fantastic SQL-First ORM library for Java.
+Love SQL, hate XML? A fresh choice for Java developers.
 
 [![Java Version](https://img.shields.io/badge/java-17%2B-blue)](https://www.oracle.com/java/technologies/)
 [![Maven](https://img.shields.io/badge/maven-3.6%2B-green)](https://maven.apache.org/)

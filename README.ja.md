@@ -1,6 +1,6 @@
 # LumenORM
 
-Java 向けの素晴らしい SQL-First ORM ライブラリ。
+MyBatis の XML が好きじゃない？Java 開発者の新しい選択肢。
 
 [![Java バージョン](https://img.shields.io/badge/java-17%2B-blue)](https://www.oracle.com/java/technologies/)
 [![Maven](https://img.shields.io/badge/maven-3.6%2B-green)](https://maven.apache.org/)

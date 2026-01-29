@@ -1,6 +1,6 @@
 # LumenORM
 
-Java 专属的精彩 SQL-First ORM 库。
+厌倦 MyBatis XML？LumenORM 给 Javaer 的新选择。
 
 [![Java 版本](https://img.shields.io/badge/java-17%2B-blue)](https://www.oracle.com/java/technologies/)
 [![Maven](https://img.shields.io/badge/maven-3.6%2B-green)](https://maven.apache.org/)
