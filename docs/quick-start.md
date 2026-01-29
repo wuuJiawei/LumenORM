@@ -6,11 +6,13 @@ Learn LumenORM in 5 minutes.
 
 Add Maven dependency:
 
+[![](https://img.shields.io/maven-central/v/pub.lighting/lumen-core?color=blue&style=flat-square)](https://central.sonatype.com/artifact/pub.lighting/lumen-core)
+
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-core</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>最新版本</version>
 </dependency>
 ```
 
@@ -18,9 +20,9 @@ For Spring Boot 3:
 
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-spring-boot-starter</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>最新版本</version>
 </dependency>
 ```
 

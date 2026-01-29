@@ -149,7 +149,7 @@ public final class PetRepository_Impl implements PetRepository {
             <configuration>
                 <annotationProcessorPaths>
                     <path>
-                        <groupId>io.lighting</groupId>
+                        <groupId>pub.lighting</groupId>
                         <artifactId>lumen-core</artifactId>
                         <version>${project.version}</version>
                     </path>

@@ -4,11 +4,13 @@ Use LumenORM with the Solon framework.
 
 ## Add Dependency
 
+[![](https://img.shields.io/maven-central/v/pub.lighting/lumen-solon-plugin?color=blue&style=flat-square)](https://central.sonatype.com/artifact/pub.lighting/lumen-solon-plugin)
+
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-solon-plugin</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>最新版本</version>
 </dependency>
 ```
 

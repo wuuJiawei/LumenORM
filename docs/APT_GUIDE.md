@@ -80,7 +80,7 @@ APT 指的是 `io.lighting.lumen.apt.SqlTemplateProcessor`，它会在**编译�
   <configuration>
     <annotationProcessorPaths>
       <path>
-        <groupId>io.lighting.lumen</groupId>
+        <groupId>pub.lighting</groupId>
         <artifactId>lumen-core</artifactId>
         <version>${project.version}</version>
       </path>

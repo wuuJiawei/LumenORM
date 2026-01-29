@@ -6,21 +6,25 @@ Use LumenORM with Spring Boot 3 or 4.
 
 Spring Boot 3:
 
+[![](https://img.shields.io/maven-central/v/pub.lighting/lumen-spring-boot-starter?color=blue&style=flat-square)](https://central.sonatype.com/artifact/pub.lighting/lumen-spring-boot-starter)
+
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-spring-boot-starter</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>最新版本</version>
 </dependency>
 ```
 
 Spring Boot 4:
 
+[![](https://img.shields.io/maven-central/v/pub.lighting/lumen-spring-boot-4-starter?color=blue&style=flat-square)](https://central.sonatype.com/artifact/pub.lighting/lumen-spring-boot-4-starter)
+
 ```xml
 <dependency>
-    <groupId>io.lighting</groupId>
+    <groupId>pub.lighting</groupId>
     <artifactId>lumen-spring-boot-4-starter</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>最新版本</version>
 </dependency>
 ```
 
