@@ -11,12 +11,15 @@
 
     <modules>
         <module>lumen-core</module>
+        <module>lumen-spring-boot-starter</module>
+        <module>lumen-spring-boot-4-starter</module>
+        <module>lumen-solon-plugin</module>
         <module>example</module>
     </modules>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.jupiter.version>5.10.1</junit.jupiter.version>
         <jacoco.version>0.8.11</jacoco.version>
