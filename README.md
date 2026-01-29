@@ -24,11 +24,19 @@ public interface PetRepository extends SqlTemplate {
     @SqlTemplate("""
         SELECT id, name, price
         FROM pets
-        WHERE species = #{species}
-        AND available = true
+        WHERE available = true
+        @if(#{species}) {
+            AND species = #{species}
+        }
+        @if(#{minPrice}) {
+            AND price >= #{minPrice}
+        }
+        @if(#{maxPrice}) {
+            AND price <= #{maxPrice}
+        }
         ORDER BY price DESC
         """)
-    List<Pet> findAvailableBySpecies(String species);
+    List<Pet> search(PetSearchCriteria criteria);
 
     // Built-in functions like #{now()}, #{uuid()} supported
     @SqlTemplate("""
@@ -39,18 +47,61 @@ public interface PetRepository extends SqlTemplate {
 }
 
 // Usage - just call the method!
-List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+List<Pet> pets = petRepository.search(new PetSearchCriteria("cat", 10.0, 100.0));
 ```
 
-No XML. No string concatenation. **Pure SQL in Java.**
+No XML. No string concatenation. **Pure SQL in Java with dynamic directives.**
+
+## Key Features
+
+### 1. Dynamic SQL with `@if` and `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{tags} && #{tags.length} > 0) {
+        AND id IN (
+            @for((tag, index) in #{tags}) {
+                #{tag.id}@{if(index < tags.length - 1)}, @end{}
+            }
+        )
+    }
+    """)
+List<Pet> findByCondition(PetCondition condition);
+```
+
+### 2. Built-in Template Directives
+
+| Directive | Description |
+|-----------|-------------|
+| `@if(cond) { ... }` | Conditional SQL blocks |
+| `@for((item, index) in list) { ... }` | Loop over collections |
+| `@where { ... }` | Auto WHERE/AND handling |
+| `@in(list) { ... }` | IN clause generation |
+| `@orderBy(field) { ... }` | Safe ORDER BY |
+| `@page(page, size) { ... }` | Pagination |
+
+### 3. Built-in Functions
+
+| Function | Description |
+|----------|-------------|
+| `#{now()}` | Current timestamp |
+| `#{uuid()}` | UUID generation |
+| `#{random()}` | Random value |
+| `#{like(value)}` | LIKE pattern |
+| `#{upper(value)}` | UPPER case |
+| `#{lower(value)}` | Lower case |
 
 ## Features
 
 - Interface-based SQL with `@SqlTemplate` and compile-time validation
-- Built-in template functions (`#{now()}`, `#{uuid()}`, `#{random()}`)
-- Type-safe Fluent DSL with lambda references
+- Dynamic SQL directives (`@if`, `@for`, `@where`, `@in`, `@page`, `@orderBy`)
+- Built-in template functions (`#{now()}`, `#{uuid()}`, etc.)
 - Custom template functions via `TemplateFunction`
-- Dual query entry points (Interface + DSL + Templates)
+- Type-safe Fluent DSL with lambda references
 - Entity metadata (Reflection or APT-generated)
 - Logical deletion, Active Record, Batch operations
 - Spring Boot 3/4 & Solon integration
@@ -80,6 +131,7 @@ public interface PetRepository extends SqlTemplate {
         FROM pets
         WHERE species = #{species}
         AND available = true
+        ORDER BY price DESC
         """)
     List<Pet> findAvailableBySpecies(String species);
 }
@@ -123,23 +175,49 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## Template Functions
+## Dynamic SQL Examples
 
-Built-in functions available in `@SqlTemplate`:
+### Conditional WHERE with `@if`
 
 ```java
 @SqlTemplate("""
-    INSERT INTO pets (id, name, created_at, track_id)
-    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{species}) {
+        AND species = #{species}
+    }
+    @if(#{minPrice}) {
+        AND price >= #{minPrice}
+    }
     """)
-void insert(Pet pet);
+List<Pet> search(String name, String species, BigDecimal minPrice);
+```
 
-// Custom functions
+### IN Clause with `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE id IN (
+        @for((id, index) in #{ids}) {
+            #{id}@{if(index < ids.length - 1)}, @end{}
+        }
+    )
+    """)
+List<Pet> findByIds(List<Long> ids);
+```
+
+### Safe ORDER BY with `@orderBy`
+
+```java
 @SqlTemplate("""
     SELECT * FROM pets
-    WHERE name LIKE #{like(#{name})}
+    @orderBy(#{sortBy}) {
+        ORDER BY #{sortBy} #{sortDir}
+    }
     """)
-List<Pet> searchByName(String name);
+List<Pet> findAll(String sortBy, String sortDir);
 ```
 
 ## Documentation

@@ -24,11 +24,19 @@ public interface PetRepository extends SqlTemplate {
     @SqlTemplate("""
         SELECT id, name, price
         FROM pets
-        WHERE species = #{species}
-        AND available = true
+        WHERE available = true
+        @if(#{species}) {
+            AND species = #{species}
+        }
+        @if(#{minPrice}) {
+            AND price >= #{minPrice}
+        }
+        @if(#{maxPrice}) {
+            AND price <= #{maxPrice}
+        }
         ORDER BY price DESC
         """)
-    List<Pet> findAvailableBySpecies(String species);
+    List<Pet> search(PetSearchCriteria criteria);
 
     // ビルトイン関数 #{now()}、#{uuid()} など対応
     @SqlTemplate("""
@@ -39,18 +47,61 @@ public interface PetRepository extends SqlTemplate {
 }
 
 // 使い方 - メソッドを呼ぶだけ！
-List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+List<Pet> pets = petRepository.search(new PetSearchCriteria("cat", 10.0, 100.0));
 ```
 
-XML なし。文字列連結なし。**Java 内で純粋な SQL。**
+XML なし。文字列連結なし。**動的ディレクティブ付き Java 内の純粋な SQL。**
+
+## 核心機能
+
+### 1. 動的 SQL `@if` と `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{tags} && #{tags.length} > 0) {
+        AND id IN (
+            @for((tag, index) in #{tags}) {
+                #{tag.id}@{if(index < tags.length - 1)}, @end{}
+            }
+        )
+    }
+    """)
+List<Pet> findByCondition(PetCondition condition);
+```
+
+### 2. ビルトイン テンプレート ディレクティブ
+
+| ディレクティブ | 説明 |
+|----------------|------|
+| `@if(cond) { ... }` | 条件 SQL ブロック |
+| `@for((item, index) in list) { ... }` | コレクションのループ |
+| `@where { ... }` | 自動 WHERE/AND 処理 |
+| `@in(list) { ... }` | IN 句生成 |
+| `@orderBy(field) { ... }` | 安全 ORDER BY |
+| `@page(page, size) { ... }` | ページネーション |
+
+### 3. ビルトイン関数
+
+| 関数 | 説明 |
+|------|------|
+| `#{now()}` | 現在のタイムスタンプ |
+| `#{uuid()}` | UUID 生成 |
+| `#{random()}` | ランダム値 |
+| `#{like(value)}` | LIKE パターン |
+| `#{upper(value)}` | 大文字変換 |
+| `#{lower(value)}` | 小文字変換 |
 
 ## 機能
 
 - インターフェース SQL + `@SqlTemplate` + コンパイル時検証
-- ビルトイン SQL 関数 (`#{now()}`、`#{uuid()}`、`#{random()}`)
+- 動的 SQL ディレクティブ (`@if`, `@for`, `@where`, `@in`, `@page`, `@orderBy`)
+- ビルトイン テンプレート関数 (`#{now()}`, `#{uuid()}`, など)
+- カスタム テンプレート関数 `TemplateFunction`
 - Lambda 参照による型安全な Fluent DSL
-- カスタムテンプレート関数 `TemplateFunction`
-- 三つのクエリエントリポイント (インターフェース + DSL + テンプレート)
 - エンティティメタデータ (リフレクションまたは APT 生成)
 - 論理削除、Active Record、バッチ操作
 - Spring Boot 3/4 & Solon 連携
@@ -80,6 +131,7 @@ public interface PetRepository extends SqlTemplate {
         FROM pets
         WHERE species = #{species}
         AND available = true
+        ORDER BY price DESC
         """)
     List<Pet> findAvailableBySpecies(String species);
 }
@@ -123,23 +175,49 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## テンプレート関数
+## 動的 SQL 例
 
-`@SqlTemplate` で使用可能なビルトイン関数：
+### 条件 WHERE `@if`
 
 ```java
 @SqlTemplate("""
-    INSERT INTO pets (id, name, created_at, track_id)
-    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{species}) {
+        AND species = #{species}
+    }
+    @if(#{minPrice}) {
+        AND price >= #{minPrice}
+    }
     """)
-void insert(Pet pet);
+List<Pet> search(String name, String species, BigDecimal minPrice);
+```
 
-// カスタム関数
+### IN 句 `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE id IN (
+        @for((id, index) in #{ids}) {
+            #{id}@{if(index < ids.length - 1)}, @end{}
+        }
+    )
+    """)
+List<Pet> findByIds(List<Long> ids);
+```
+
+### 安全 ORDER BY `@orderBy`
+
+```java
 @SqlTemplate("""
     SELECT * FROM pets
-    WHERE name LIKE #{like(#{name})}
+    @orderBy(#{sortBy}) {
+        ORDER BY #{sortBy} #{sortDir}
+    }
     """)
-List<Pet> searchByName(String name);
+List<Pet> findAll(String sortBy, String sortDir);
 ```
 
 ## ドキュメント

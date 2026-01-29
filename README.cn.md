@@ -24,11 +24,19 @@ public interface PetRepository extends SqlTemplate {
     @SqlTemplate("""
         SELECT id, name, price
         FROM pets
-        WHERE species = #{species}
-        AND available = true
+        WHERE available = true
+        @if(#{species}) {
+            AND species = #{species}
+        }
+        @if(#{minPrice}) {
+            AND price >= #{minPrice}
+        }
+        @if(#{maxPrice}) {
+            AND price <= #{maxPrice}
+        }
         ORDER BY price DESC
         """)
-    List<Pet> findAvailableBySpecies(String species);
+    List<Pet> search(PetSearchCriteria criteria);
 
     // 支持内置函数 #{now()}、#{uuid()} 等
     @SqlTemplate("""
@@ -39,18 +47,61 @@ public interface PetRepository extends SqlTemplate {
 }
 
 // 使用 - 直接调用方法即可！
-List<Pet> dogs = petRepository.findAvailableBySpecies("dog");
+List<Pet> pets = petRepository.search(new PetSearchCriteria("cat", 10.0, 100.0));
 ```
 
-没有 XML。没有字符串拼接。**纯 SQL 在 Java 中。**
+没有 XML。没有字符串拼接。**带动态指令的纯 SQL 在 Java 中。**
+
+## 核心特性
+
+### 1. 动态 SQL `@if` 和 `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{tags} && #{tags.length} > 0) {
+        AND id IN (
+            @for((tag, index) in #{tags}) {
+                #{tag.id}@{if(index < tags.length - 1)}, @end{}
+            }
+        )
+    }
+    """)
+List<Pet> findByCondition(PetCondition condition);
+```
+
+### 2. 内置模板指令
+
+| 指令 | 描述 |
+|------|------|
+| `@if(cond) { ... }` | 条件 SQL 块 |
+| `@for((item, index) in list) { ... }` | 循环遍历集合 |
+| `@where { ... }` | 自动 WHERE/AND 处理 |
+| `@in(list) { ... }` | IN 子句生成 |
+| `@orderBy(field) { ... }` | 安全 ORDER BY |
+| `@page(page, size) { ... }` | 分页 |
+
+### 3. 内置函数
+
+| 函数 | 描述 |
+|------|------|
+| `#{now()}` | 当前时间戳 |
+| `#{uuid()}` | UUID 生成 |
+| `#{random()}` | 随机值 |
+| `#{like(value)}` | LIKE 模式 |
+| `#{upper(value)}` | 大写转换 |
+| `#{lower(value)}` | 小写转换 |
 
 ## 特性
 
 - 接口定义 SQL + `@SqlTemplate` + 编译时验证
-- 内置模板函数 (`#{now()}`、`#{uuid()}`、`#{random()}`)
-- 基于 Lambda 的类型安全 Fluent DSL
+- 动态 SQL 指令 (`@if`, `@for`, `@where`, `@in`, `@page`, `@orderBy`)
+- 内置模板函数 (`#{now()}`, `#{uuid()}`, 等)
 - 自定义模板函数 `TemplateFunction`
-- 三种查询入口 (接口 + DSL + 模板)
+- 基于 Lambda 的类型安全 Fluent DSL
 - 实体元数据 (反射或 APT 生成)
 - 逻辑删除、Active Record、批量操作
 - Spring Boot 3/4 & Solon 集成
@@ -80,6 +131,7 @@ public interface PetRepository extends SqlTemplate {
         FROM pets
         WHERE species = #{species}
         AND available = true
+        ORDER BY price DESC
         """)
     List<Pet> findAvailableBySpecies(String species);
 }
@@ -123,23 +175,49 @@ String sql = """
 List<Pet> pets = db.run(sql, Bindings.empty(), Pet.class);
 ```
 
-## 模板函数
+## 动态 SQL 示例
 
-`@SqlTemplate` 中可用的内置函数：
+### 条件 WHERE 用 `@if`
 
 ```java
 @SqlTemplate("""
-    INSERT INTO pets (id, name, created_at, track_id)
-    VALUES (#{id}, #{name}, #{now()}, #{uuid()})
+    SELECT * FROM pets WHERE 1=1
+    @if(#{name}) {
+        AND name = #{name}
+    }
+    @if(#{species}) {
+        AND species = #{species}
+    }
+    @if(#{minPrice}) {
+        AND price >= #{minPrice}
+    }
     """)
-void insert(Pet pet);
+List<Pet> search(String name, String species, BigDecimal minPrice);
+```
 
-// 自定义函数
+### IN 子句用 `@for`
+
+```java
+@SqlTemplate("""
+    SELECT * FROM pets WHERE id IN (
+        @for((id, index) in #{ids}) {
+            #{id}@{if(index < ids.length - 1)}, @end{}
+        }
+    )
+    """)
+List<Pet> findByIds(List<Long> ids);
+```
+
+### 安全 ORDER BY 用 `@orderBy`
+
+```java
 @SqlTemplate("""
     SELECT * FROM pets
-    WHERE name LIKE #{like(#{name})}
+    @orderBy(#{sortBy}) {
+        ORDER BY #{sortBy} #{sortDir}
+    }
     """)
-List<Pet> searchByName(String name);
+List<Pet> findAll(String sortBy, String sortDir);
 ```
 
 ## 文档
