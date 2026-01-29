@@ -426,7 +426,8 @@ final class SqlTemplateRenderer {
         }
         Token token = cursor.readToken();
         if (token == null) {
-            return false;
+            // No token found (e.g., ends with ?), need OR prefix
+            return true;
         }
         String upper = token.value.toUpperCase();
         return !("AND".equals(upper) || "OR".equals(upper) || "WHERE".equals(upper));

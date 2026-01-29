@@ -241,111 +241,86 @@ public final class EntityMetaProcessor extends AbstractProcessor {
         String columnsArray = fieldToColumn.values().stream()
             .map(c -> "\"" + AptCodegenUtils.escapeJava(c) + "\"")
             .collect(java.util.stream.Collectors.joining(", "));
-        
+
+        String tableClassName = metaClassName + "Table";
+        String escapedTableName = AptCodegenUtils.escapeJava(tableName);
+        String escapedDefaultAlias = AptCodegenUtils.escapeJava(defaultAlias);
+
         StringBuilder content = new StringBuilder();
         content.append(AptCodegenUtils.packageLine(packageName + ".meta"));
-        content.append(String.format("""
-
-            /**
-             * APT 生成的实体元数据类。
-             * <p>
-             * 常量形式 - 直接获取列名字符串:
-             *   UserMeta.ID       → "id"
-             *   UserMeta.NAME     → "name"
-             *   UserMeta.STATUS   → "status"
-             * <p>
-             * 方法形式 - DSL 构建 (类型安全):
-             *   UserMeta.id()     → ColumnRef("t", "id")
-             *   UserMeta.name()   → ColumnRef("t", "name")
-             *   UserMeta.status() → ColumnRef("t", "status")
-             * <p>
-             * 表实例:
-             *   UserMeta.TABLE                → 别名 "t" 的表实例
-             *   UserMeta.TABLE.as("u")        → 别名 "u" 的表实例
-             * <p>
-             * 表信息:
-             *   UserMeta.tableName()  → 表名字符串
-             *   UserMeta.columns()    → 所有列名的集合
-             * <p>
-             * 逻辑删除（如果配置了 @LogicDelete）:
-             *   UserMeta.TABLE.deletedAt()  → 逻辑删除列引用
-             *   UserMeta.TABLE.notDeleted() → 未删除条件
-             */
-            @SuppressWarnings("unused")
-            public final class %s {
-                // ========== 常量形式：列名字符串 ==========
-                %s
-                // ========== 方法形式：DSL 列引用 ==========
-                %s
-                // ========== 表实例 ==========
-                public static final %s TABLE = new %s("%s", "%s");
-                
-                public %s as(String alias) {
-                    return new %s("%s", alias);
-                }
-                
-                // ========== 表信息 ==========
-                public static String tableName() {
-                    return "%s";
-                }
-                
-                public static java.util.Set<String> columns() {
-                    return java.util.Set.of(%s);
-                }
-                
-                // ========== 逻辑删除支持 ==========
-                %s
-            }
-
-            /**
-             * 表实例（支持别名）。
-             * <p>
-             * 使用示例:
-             *   var u = UserMeta.TABLE.as("u");
-             *   dsl.select(u.id(), u.name()).from(u).where(u.name().eq("John"))
-             * <p>
-             * 逻辑删除示例:
-             *   var t = UserMeta.TABLE;
-             *   dsl.selectFrom(t).where(t.notDeleted())
-             */
-            final class %s {
-                private final String table;
-                private final String alias;
-                
-                %s(String table, String alias) {
-                    this.table = table;
-                    this.alias = alias;
-                }
-                
-                public String table() {
-                    return table;
-                }
-                
-                public String alias() {
-                    return alias;
-                }
-                
-                %s
-                %s
-            }
-            """,
-            metaClassName,
-            constantsBuilder.toString().trim(),
-            staticMethodsBuilder.toString().trim(),
-            metaClassName + "Table",
-            metaClassName + "Table",
-            AptCodegenUtils.escapeJava(tableName),
-            AptCodegenUtils.escapeJava(defaultAlias),
-            metaClassName + "Table",
-            metaClassName + "Table",
-            AptCodegenUtils.escapeJava(tableName),
-            AptCodegenUtils.escapeJava(tableName),
-            columnsArray,
-            staticLogicDeleteBuilder.toString().trim(),
-            metaClassName + "Table",
-            metaClassName + "Table",
-            tableMethodsBuilder.toString().trim()
-        ));
+        content.append("/**\n");
+        content.append(" * APT 生成的实体元数据类。\n");
+        content.append(" * <p>\n");
+        content.append(" * 常量形式 - 直接获取列名字符串:\n");
+        content.append(" *   UserMeta.ID       → \"id\"\n");
+        content.append(" *   UserMeta.NAME     → \"name\"\n");
+        content.append(" *   UserMeta.STATUS   → \"status\"\n");
+        content.append(" * <p>\n");
+        content.append(" * 方法形式 - DSL 构建 (类型安全):\n");
+        content.append(" *   UserMeta.id()     → ColumnRef(\"t\", \"id\")\n");
+        content.append(" *   UserMeta.name()   → ColumnRef(\"t\", \"name\")\n");
+        content.append(" *   UserMeta.status() → ColumnRef(\"t\", \"status\")\n");
+        content.append(" * <p>\n");
+        content.append(" * 表实例:\n");
+        content.append(" *   UserMeta.TABLE                → 别名 \"t\" 的表实例\n");
+        content.append(" *   UserMeta.TABLE.as(\"u\")        → 别名 \"u\" 的表实例\n");
+        content.append(" * <p>\n");
+        content.append(" * 表信息:\n");
+        content.append(" *   UserMeta.tableName()  → 表名字符串\n");
+        content.append(" *   UserMeta.columns()    → 所有列名的集合\n");
+        content.append(" * <p>\n");
+        content.append(" * 逻辑删除（如果配置了 @LogicDelete）:\n");
+        content.append(" *   UserMeta.TABLE.deletedAt()  → 逻辑删除列引用\n");
+        content.append(" *   UserMeta.TABLE.notDeleted() → 未删除条件\n");
+        content.append(" */\n");
+        content.append("@SuppressWarnings(\"unused\")\n");
+        content.append("public final class ").append(metaClassName).append(" {\n");
+        content.append("    // ========== 常量形式：列名字符串 ==========\n");
+        content.append(constantsBuilder.toString().trim()).append("\n");
+        content.append("    // ========== 方法形式：DSL 列引用 ==========\n");
+        content.append(staticMethodsBuilder.toString().trim()).append("\n");
+        content.append("    // ========== 表实例 ==========\n");
+        content.append("    public static final ").append(tableClassName).append(" TABLE = new ");
+        content.append(tableClassName).append("(\"").append(escapedTableName).append("\", \"").append(escapedDefaultAlias).append("\");\n\n");
+        content.append("    public ").append(tableClassName).append(" as(String alias) {\n");
+        content.append("        return new ").append(tableClassName).append("(\"").append(escapedTableName).append("\", alias);\n");
+        content.append("    }\n\n");
+        content.append("    // ========== 表信息 ==========\n");
+        content.append("    public static String tableName() {\n");
+        content.append("        return \"").append(escapedTableName).append("\";\n");
+        content.append("    }\n\n");
+        content.append("    public static java.util.Set<String> columns() {\n");
+        content.append("        return java.util.Set.of(").append(columnsArray).append(");\n");
+        content.append("    }\n\n");
+        content.append("    // ========== 逻辑删除支持 ==========\n");
+        content.append(staticLogicDeleteBuilder.toString().trim()).append("\n");
+        content.append("}\n\n");
+        content.append("/**\n");
+        content.append(" * 表实例（支持别名）。\n");
+        content.append(" * <p>\n");
+        content.append(" * 使用示例:\n");
+        content.append(" *   var u = UserMeta.TABLE.as(\"u\");\n");
+        content.append(" *   dsl.select(u.id(), u.name()).from(u).where(u.name().eq(\"John\"))\n");
+        content.append(" * <p>\n");
+        content.append(" * 逻辑删除示例:\n");
+        content.append(" *   var t = UserMeta.TABLE;\n");
+        content.append(" *   dsl.selectFrom(t).where(t.notDeleted())\n");
+        content.append(" */\n");
+        content.append("final class ").append(tableClassName).append(" {\n");
+        content.append("    private final String table;\n");
+        content.append("    private final String alias;\n\n");
+        content.append("    ").append(tableClassName).append("(String table, String alias) {\n");
+        content.append("        this.table = table;\n");
+        content.append("        this.alias = alias;\n");
+        content.append("    }\n\n");
+        content.append("    public String table() {\n");
+        content.append("        return table;\n");
+        content.append("    }\n\n");
+        content.append("    public String alias() {\n");
+        content.append("        return alias;\n");
+        content.append("    }\n\n");
+        content.append(tableMethodsBuilder.toString().trim()).append("\n");
+        content.append("}\n");
         
         AptCodegenUtils.writeSourceFile(
             processingEnv.getFiler(),

@@ -40,10 +40,10 @@ class EntityMetaProcessorTest {
         CompilationResult result = compile("example.Order", source);
         assertTrue(result.success());
 
-        Path generated = result.outputDir().resolve("example").resolve("QOrder.java");
+        Path generated = result.outputDir().resolve("example").resolve("meta").resolve("OrderMeta.java");
         assertTrue(Files.exists(generated));
         String content = Files.readString(generated);
-        assertTrue(content.contains("new QOrder(\"orders\", \"o\")"));
+        assertTrue(content.contains("new OrderMetaTable(\"orders\", \"o\")"));
         assertTrue(content.contains("ColumnRef.of(alias, \"id\")"));
         assertTrue(content.contains("ColumnRef.of(alias, \"order_no\")"));
     }

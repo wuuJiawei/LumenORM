@@ -6,6 +6,7 @@ import io.lighting.lumen.db.DefaultDb;
 import io.lighting.lumen.dsl.Dsl;
 import io.lighting.lumen.jdbc.JdbcExecutor;
 import io.lighting.lumen.meta.EntityMetaRegistry;
+import io.lighting.lumen.meta.ReflectionEntityMetaRegistry;
 import io.lighting.lumen.sql.Dialect;
 import io.lighting.lumen.sql.SqlRenderer;
 import io.lighting.lumen.sql.dialect.DialectResolver;
@@ -287,6 +288,7 @@ public final class Lumen {
             Dialect resolvedDialect = resolveDialect();
             EntityNameResolver resolvedEntityNameResolver = resolveEntityNameResolver();
             SqlRenderer finalRenderer = renderer == null ? new SqlRenderer(resolvedDialect) : renderer;
+            EntityMetaRegistry finalMetaRegistry = resolveMetaRegistry();
             Db finalDb = db;
             if (finalDb == null) {
                 Objects.requireNonNull(dataSource, "dataSource");
@@ -295,17 +297,24 @@ public final class Lumen {
                     executor,
                     finalRenderer,
                     resolvedDialect,
-                    metaRegistry,
+                    finalMetaRegistry,
                     resolvedEntityNameResolver,
                     observers
                 );
             }
-            Dsl dsl = new Dsl(metaRegistry);
-            Lumen lumen = new Lumen(finalDb, dsl, resolvedDialect, metaRegistry, resolvedEntityNameResolver, finalRenderer);
+            Dsl dsl = new Dsl(finalMetaRegistry);
+            Lumen lumen = new Lumen(finalDb, dsl, resolvedDialect, finalMetaRegistry, resolvedEntityNameResolver, finalRenderer);
             if (startupLogEnabled) {
                 logStartup(lumen);
             }
             return lumen;
+        }
+
+        private EntityMetaRegistry resolveMetaRegistry() {
+            if (metaRegistry != null) {
+                return metaRegistry;
+            }
+            return new ReflectionEntityMetaRegistry();
         }
 
         private Dialect resolveDialect() {
